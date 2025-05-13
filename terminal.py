@@ -1,6 +1,6 @@
 import pygame
-from typing import List
-from constants import FONT, BLACK, WHITE, DARK_GRAY
+from typing import List, Dict, Callable
+from constants import FONT, BLACK, WHITE
 
 class Terminal:
     def __init__(self, x: int, y: int, width: int, height: int):
@@ -11,6 +11,7 @@ class Terminal:
         self.cursor_visible = True
         self.cursor_timer = 0
         self.cursor_blink_speed = 500  # milliseconds
+        self.background_color = BLACK  # Pode ser alterado pela ilha
         
         # Input box properties
         self.input_height = 30
@@ -29,59 +30,142 @@ class Terminal:
             height - self.input_height
         )
         
+        # Command history
+        self.command_history = []
+        self.history_index = -1
+        
         # Command handling
-        self.commands = {
-            "fish": self.cmd_fish
+        self.commands: Dict[str, Callable] = {
+            "fish": self.cmd_fish,
+            "man": self.cmd_man,
+            "help": self.cmd_help
         }
     
     def cmd_fish(self) -> str:
         return "You grab your fishing rod and start looking for fish in the sea..."
+        
+    def cmd_man(self, *args) -> str:
+        if not args:
+            page_num = 1
+        else:
+            try:
+                page_num = int(args[0])
+            except (ValueError, IndexError):
+                return "Usage: man <page_number>"
+        
+        from manual import Manual
+        page = Manual.get_page(page_num)
+        content = page["content"]
+        hint = page["hint"]
+        
+        return f"{content}\n\nHint: {hint}"
     
+    def cmd_help(self) -> str:
+        return "\n".join([
+            "Available commands:",
+            "- fish: Start fishing",
+            "- man <page>: Show manual page",
+            "- help: Show this help message"
+        ])
+        
     def handle_input(self, event: pygame.event.Event) -> None:
+        """Processa a entrada do usuário para o terminal"""
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN and self.input_text.strip():
-                command = self.input_text.strip().lower()
-                if command in self.commands:
+            if event.key == pygame.K_RETURN:
+                # Process command
+                if self.input_text:
+                    # Save to history
+                    self.command_history.append(self.input_text)
+                    self.history_index = -1
+                    
+                    # Display command in output
                     self.output_lines.append(f"> {self.input_text}")
-                    self.output_lines.append(self.commands[command]())
-                else:
-                    self.output_lines.append(f"> {self.input_text}")
-                    self.output_lines.append("Command not recognized.")
-                self.input_text = ""
+                    
+                    # Parse and execute command
+                    command_parts = self.input_text.split()
+                    command = command_parts[0].lower() if command_parts else ""
+                    args = command_parts[1:] if len(command_parts) > 1 else []
+                    
+                    # Execute command if it exists
+                    if command in self.commands:
+                        result = self.commands[command](*args)
+                        if result:
+                            # Split result into lines and add to output
+                            for line in result.split('\n'):
+                                self.output_lines.append(line)
+                    else:
+                        self.output_lines.append(f"Command not found: {command}")
+                    
+                    # Clear input
+                    self.input_text = ""
+            
             elif event.key == pygame.K_BACKSPACE:
+                # Remove last character
                 self.input_text = self.input_text[:-1]
-            else:
-                if event.unicode.isprintable():
-                    self.input_text += event.unicode
-
+            
+            elif event.key == pygame.K_UP:
+                # Navigate command history up
+                if self.command_history:
+                    if self.history_index < len(self.command_history) - 1:
+                        self.history_index += 1
+                        self.input_text = self.command_history[-(self.history_index + 1)]
+            
+            elif event.key == pygame.K_DOWN:
+                # Navigate command history down
+                if self.history_index > 0:
+                    self.history_index -= 1
+                    self.input_text = self.command_history[-(self.history_index + 1)]
+                else:
+                    self.history_index = -1
+                    self.input_text = ""
+            
+            elif event.unicode and ord(event.unicode) >= 32 and ord(event.unicode) < 127:
+                # Add character to input
+                self.input_text += event.unicode
+    
     def draw(self, screen: pygame.Surface) -> None:
-        # Draw terminal background
-        pygame.draw.rect(screen, BLACK, self.rect)
+        """Desenha o terminal na tela"""
+        # Draw output area background
+        pygame.draw.rect(screen, self.background_color, self.output_rect)
         
-        # Draw output area with text
-        pygame.draw.rect(screen, BLACK, self.output_rect)
-        y_offset = self.output_rect.bottom - 30
-        for line in reversed(self.output_lines[-100:]):  # Show last 100 lines
-            text_surface = self.font.render(line, True, WHITE)
-            screen.blit(text_surface, (self.output_rect.x + 10, y_offset))
-            y_offset -= 30
+        # Draw input area background
+        pygame.draw.rect(screen, BLACK, self.input_rect)
         
-        # Draw input area
-        pygame.draw.rect(screen, DARK_GRAY, self.input_rect)
+        # Draw separator line
+        pygame.draw.line(
+            screen,
+            (128, 128, 128),  # Gray color
+            (self.rect.x, self.input_rect.y),
+            (self.rect.x + self.rect.width, self.input_rect.y),
+            2
+        )
+        
+        # Update cursor visibility based on timer
+        self.cursor_timer += pygame.time.get_ticks() % 1000
+        if self.cursor_timer >= self.cursor_blink_speed:
+            self.cursor_timer = 0
+            self.cursor_visible = not self.cursor_visible
         
         # Draw input text with cursor
-        input_surface = self.font.render(self.input_text, True, WHITE)
-        screen.blit(input_surface, (self.input_rect.x + 10, self.input_rect.y + 5))
+        input_prompt = "> "
+        input_surface = self.font.render(input_prompt + self.input_text, True, WHITE)
+        screen.blit(input_surface, (self.input_rect.x + 5, self.input_rect.y + 5))
         
-        # Draw blinking cursor
+        # Draw cursor if visible
         if self.cursor_visible:
-            cursor_x = self.input_rect.x + 10 + input_surface.get_width()
-            pygame.draw.line(screen, WHITE,
-                           (cursor_x, self.input_rect.y + 5),
-                           (cursor_x, self.input_rect.y + 25))
+            cursor_x = self.input_rect.x + 5 + self.font.size(input_prompt + self.input_text)[0]
+            pygame.draw.line(
+                screen,
+                WHITE,
+                (cursor_x, self.input_rect.y + 5),
+                (cursor_x, self.input_rect.y + self.input_height - 5),
+                2
+            )
         
-        # Update cursor visibility
-        self.cursor_timer += 1
-        if self.cursor_timer >= self.cursor_blink_speed // 16:  # Adjust for 60 FPS
-            self.cursor_visible = not self.cursor_visible
-            self.cursor_timer = 0
+        # Draw output lines (showing only the last n lines that fit in the output area)
+        visible_lines = self.output_rect.height // 20  # Estimating ~20px per line
+        start_line = max(0, len(self.output_lines) - visible_lines)
+        
+        for i, line in enumerate(self.output_lines[start_line:]):
+            line_surface = self.font.render(line, True, WHITE)
+            screen.blit(line_surface, (self.output_rect.x + 5, self.output_rect.y + 5 + i * 20))
