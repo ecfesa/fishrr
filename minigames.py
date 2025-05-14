@@ -47,7 +47,7 @@ class FishingMinigame(Minigame):
         pygame.display.flip()
         
         # Loop do minigame
-        while running:
+        while running and self.hooked_fish < self.required_fish:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.game.running = False
@@ -143,7 +143,7 @@ class FishingMinigame(Minigame):
             
             # Verificar se o objetivo foi atingido
             if self.hooked_fish >= self.required_fish:
-                success_text = self.font.render("Minigame completed! Press ESC to return.", True, (255, 255, 0))
+                success_text = self.font.render("Minigame completed! Returning to game...", True, (255, 255, 0))
                 screen.blit(success_text, (350, 150))
             
             # Instrução para sair
