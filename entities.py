@@ -2,20 +2,7 @@ import pygame
 import math
 import random
 from constants import *
-
-# Function to play a sound effect
-def play_sound(sound_file):
-    # Make sure to add .wav extension if not already present
-    if not sound_file.endswith('.wav'):
-        sound_file += '.wav'
-    try:
-        sound = pygame.mixer.Sound(f"sounds/{sound_file}")
-        sound.set_volume(0.15)  # Set lower volume for all sound effects
-        sound.play()
-    except FileNotFoundError:
-        print(f"Warning: Sound file 'sounds/{sound_file}' not found")
-    except Exception as e:
-        print(f"Error playing sound: {e}")
+from audio import play_sound
 
 # Wind gust class - Significantly harder with extreme speed/complexity at high accelerations
 class WindGust:
