@@ -21,7 +21,7 @@ class System:
     def process_input(self, char: str):
         self.shell.process_input(char)
 
-    def touch(self, path: str = ""):
+    def touch(self, path: str = "", *args, **kwargs):
         if path == "":
             self.terminal.print("Error: path is required.\n")
             return
@@ -32,7 +32,7 @@ class System:
 
         self.filesystem.create_file(path)
 
-    def cat(self, path: str = ""):
+    def cat(self, path: str = "", *args, **kwargs):
         if path == "":
             self.terminal.print("Error: path is required.\n")
             return
@@ -54,13 +54,13 @@ class System:
         else:
             self.terminal.print("Error: path is not a file.\n")
 
-    def mkdir(self, path: str = ""):
+    def mkdir(self, path: str = "", *args, **kwargs):
         if path == "":
             self.terminal.print("Error: path is required.\n")
             return
         self.filesystem.create_directory(path)
 
-    def rm(self, path: str = ""):
+    def rm(self, path: str = "", *args, **kwargs):
         if path == "":
             self.terminal.print("Error: path is required.\n")
             return
@@ -76,7 +76,7 @@ class System:
         if not self.filesystem.delete_node(path):
             self.terminal.print("Error: path does not exist.\n")
 
-    def ls(self):
+    def ls(self, *args, **kwargs):
         out = ""
         node = self.filesystem.get_node(self.shell.cwd)
         if isinstance(node, Directory):
@@ -92,7 +92,7 @@ class System:
             out = "Error: current path is not a directory.\n"
         self.terminal.print(out)
 
-    def cd(self, path: str = "/"):
+    def cd(self, path: str = "/", *args, **kwargs):
         # Check if path is absolute
         if not path.startswith("/"):
             path = self.shell.cwd + "/" + path
@@ -110,7 +110,7 @@ class System:
         
         self.shell.cwd = path
 
-    def pwd(self):
+    def pwd(self, *args, **kwargs):
         self.terminal.print(self.shell.cwd + "\n")
     
 

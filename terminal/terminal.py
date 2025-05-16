@@ -16,10 +16,15 @@ class Terminal:
         self.next_buffer: TerminalBuffer = [[' ' for _ in range(size_x)] for _ in range(size_y)]
         self.cursor_pos = TerminalPosition()
 
-        print(f"terminal buffer initialized with size [{size_x}, {size_y}]")
+        self.flush() # To ensure the cursor is visible on the initial buffer
 
     def flush(self):
-        self.buffer = self.next_buffer
+        # Deep copy next_buffer to buffer to store the content
+        self.buffer = [row[:] for row in self.next_buffer]
+        # Then, draw the cursor on the (display) buffer
+        if 0 <= self.cursor_pos.y < self.size_y and \
+           0 <= self.cursor_pos.x < self.size_x:
+            self.buffer[self.cursor_pos.y][self.cursor_pos.x] = '_'
 
     def set_char(self, char: str, x: int = -1, y: int = -1):
         if x == -1:
@@ -49,6 +54,7 @@ class Terminal:
     def clear(self):
         self.next_buffer = [[' ' for _ in range(self.size_x)] for _ in range(self.size_y)]
         self.cursor_pos = TerminalPosition()
+        self.flush() # To make the cleared screen and new cursor position visible
 
     def print(self, text: str):
         for char in text:
