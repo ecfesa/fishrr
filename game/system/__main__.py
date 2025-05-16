@@ -1,9 +1,9 @@
 import sys
 import os
 
-from terminal import Terminal
-from shell import Shell
-from system import System
+from game.system.terminal import Terminal
+from game.system.shell import Shell
+from game.system.fish_os import System
 # Detect platform
 IS_WINDOWS = os.name == 'nt'
 

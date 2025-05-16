@@ -1,6 +1,4 @@
 from enum import Enum
-
-
 type TerminalBuffer = list[list[str]]
 
 class TerminalPosition:

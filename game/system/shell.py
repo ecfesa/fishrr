@@ -1,4 +1,4 @@
-from terminal import Terminal
+from game.system.terminal import Terminal
 from enum import Enum
 
 class ShellMode(Enum):
@@ -34,6 +34,11 @@ class Shell:
             else:
                 self.cmd += char
                 self.terminal.print(char)
+
+    def clear(self):
+        self.cmd = ""
+        self.terminal.clear()
+        self.print_shell_prompt()
 
     def execute_cmd(self):
         if self.cmd == "":
