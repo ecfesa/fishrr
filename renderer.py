@@ -2,54 +2,74 @@ import pygame
 import math
 from constants import *
 
+# Common drawing utilities
+def draw_terminal_style_corner(screen, color, x, y, size, is_top=True, is_left=True):
+    """Draw a terminal-style corner (L-shape) with given parameters"""
+    # Horizontal line
+    pygame.draw.line(screen, color, 
+                    (x, y), 
+                    (x + (size if is_left else -size), y), 2)
+    # Vertical line
+    pygame.draw.line(screen, color, 
+                    (x, y), 
+                    (x, y + (size if is_top else -size)), 2)
+
+def draw_glow_color(base_color, glow_value, intensity=100):
+    """Calculate a glowing color based on the base color and glow value"""
+    if isinstance(base_color, tuple) and len(base_color) >= 3:
+        glow_intensity = 155 + int(intensity * math.sin(glow_value))
+        # Modify only the components that exist in the base color
+        if len(base_color) == 3:
+            return (
+                min(255, base_color[0] + (glow_intensity if base_color[0] > 0 else 0)), 
+                min(255, base_color[1] + (glow_intensity if base_color[1] > 0 else 0)), 
+                min(255, base_color[2] + (glow_intensity if base_color[2] > 0 else 0))
+            )
+        return base_color
+    return base_color
+
 # Draw the bar based on its position with pulsing glow effect
 def draw_bar(screen, bar_position, glow_value):
-    # Calculate pulsing glow value
-    glow_intensity = 155 + int(100 * math.sin(glow_value))
-    glow_color = (0, glow_intensity, 0)  # Terminal green glow
+    glow_color = draw_glow_color(GREEN, glow_value)
     
-    # Draw the bar on the outer square now
-    if bar_position == 0:  # Top
-        pygame.draw.rect(screen, glow_color, (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], OUTER_SQUARE_SIZE, BAR_THICKNESS))
-    elif bar_position == 1:  # Right
-        pygame.draw.rect(screen, glow_color, (OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE - BAR_THICKNESS, OUTER_SQUARE_POS[1], BAR_THICKNESS, OUTER_SQUARE_SIZE))
-    elif bar_position == 2:  # Bottom
-        pygame.draw.rect(screen, glow_color, (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1] + OUTER_SQUARE_SIZE - BAR_THICKNESS, OUTER_SQUARE_SIZE, BAR_THICKNESS))
-    elif bar_position == 3:  # Left
-        pygame.draw.rect(screen, glow_color, (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], BAR_THICKNESS, OUTER_SQUARE_SIZE))
+    # Draw the bar on the outer square
+    bar_positions = [
+        (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], OUTER_SQUARE_SIZE, BAR_THICKNESS),  # Top
+        (OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE - BAR_THICKNESS, OUTER_SQUARE_POS[1], BAR_THICKNESS, OUTER_SQUARE_SIZE),  # Right
+        (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1] + OUTER_SQUARE_SIZE - BAR_THICKNESS, OUTER_SQUARE_SIZE, BAR_THICKNESS),  # Bottom
+        (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], BAR_THICKNESS, OUTER_SQUARE_SIZE)  # Left
+    ]
+    
+    pygame.draw.rect(screen, glow_color, bar_positions[bar_position])
 
-# Draw water ripples - terminal style (SIMPLIFIED)
+# Draw water ripples - terminal style
 def draw_water(screen, ripples, water_offset):
+    """Draw a simplified water background with moving patterns but no static circles"""
     # Draw outer square background with subtle grid pattern
-    pygame.draw.rect(screen, BLACK, (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], OUTER_SQUARE_SIZE, OUTER_SQUARE_SIZE))
+    pygame.draw.rect(screen, BLACK, (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], 
+                                    OUTER_SQUARE_SIZE, OUTER_SQUARE_SIZE))
     
     # Draw subtle grid pattern in outer square (space between inner and outer)
     cell_size = 20
     for x in range(OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE, cell_size):
         for y in range(OUTER_SQUARE_POS[1], OUTER_SQUARE_POS[1] + OUTER_SQUARE_SIZE, cell_size):
-            # Only draw if in the outer square but not in the inner square
-            in_inner_square = (
-                x >= SQUARE_POS[0] and 
-                x < SQUARE_POS[0] + SQUARE_SIZE and
-                y >= SQUARE_POS[1] and 
-                y < SQUARE_POS[1] + SQUARE_SIZE
-            )
-            
-            if not in_inner_square:
-                # Draw a very subtle pattern in the outer area
-                char_index = int((x + y + water_offset * 3) % 4)
-                if char_index == 0:
-                    pygame.draw.rect(screen, (0, 40, 0), (x + 8, y + 8, 2, 2), 0)
+            # Skip drawing if in the inner square
+            if (x >= SQUARE_POS[0] and x < SQUARE_POS[0] + SQUARE_SIZE and
+                y >= SQUARE_POS[1] and y < SQUARE_POS[1] + SQUARE_SIZE):
+                continue
+                
+            # Draw a very subtle pattern in the outer area
+            if int((x + y + water_offset * 3) % 4) == 0:
+                pygame.draw.rect(screen, (0, 40, 0), (x + 8, y + 8, 2, 2), 0)
     
-    # Draw inner water background (dark area)
+    # Draw inner water background
     pygame.draw.rect(screen, BLACK, (SQUARE_POS[0], SQUARE_POS[1], SQUARE_SIZE, SQUARE_SIZE))
     
-    # Draw ASCII-like grid pattern for water (REDUCED FLICKERING)
-    cell_size = 20  # Increased from 10 to 20
+    # Draw ASCII-like grid pattern for water (reduced flickering)
     for x in range(SQUARE_POS[0], SQUARE_POS[0] + SQUARE_SIZE, cell_size):
         for y in range(SQUARE_POS[1], SQUARE_POS[1] + SQUARE_SIZE, cell_size):
             # Determine which character to draw based on position and time
-            char_index = int((x + y + water_offset * 5) % 3)  # Reduced mod from 4 to 3, slowed animation
+            char_index = int((x + y + water_offset * 5) % 3)
             if char_index == 0:
                 pygame.draw.line(screen, DARK_GREEN, (x, y), (x + cell_size, y + cell_size), 1)
             elif char_index == 1:
@@ -57,91 +77,74 @@ def draw_water(screen, ripples, water_offset):
             elif char_index == 2:
                 pygame.draw.rect(screen, DARK_GREEN, (x + 3, y + 3, 2, 2), 0)
     
-    # Draw simplified ripple effects
-    for ripple in ripples:
-        pygame.draw.circle(screen, GREEN, (int(ripple['x']), int(ripple['y'])), int(ripple['radius']), 1)
+    # No ripple effects (static circles) are drawn
 
-# Draw wind gust feedback effects (new function)
+# Draw wind gust feedback effects
 def draw_gust_feedback(screen, wind_gusts, flash_timer):
-    # Draw feedback for collected and blocked gusts
+    center_x, center_y = BOAT_CENTER
+    
     for gust in wind_gusts:
         if not gust.active:  # Only process inactive (already handled) gusts
-            center_x, center_y = BOAT_CENTER
-            
             if gust.collected:
-                # Draw a positive feedback effect (expanding green circle)
+                # Draw positive feedback (expanding green circle)
                 radius = flash_timer * 3
-                if radius < 40:  # Only draw if still visible
-                    alpha = max(0, 255 - (radius * 6))  # Fade out with size
-                    color = (0, 255, 0, alpha)
-                    
-                    # Create a temporary surface with alpha
+                if radius < 40:
+                    alpha = max(0, 255 - (radius * 6))
                     feedback_surf = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
-                    pygame.draw.circle(feedback_surf, color, (radius, radius), radius, 2)
+                    pygame.draw.circle(feedback_surf, (0, 255, 0, alpha), (radius, radius), radius, 2)
                     screen.blit(feedback_surf, (center_x - radius, center_y - radius))
             
             elif gust.blocked:
-                # Draw a neutral feedback effect (red X)
+                # Draw neutral feedback (red X)
                 size = min(30, flash_timer * 3)
                 if size > 0:
                     thickness = max(1, 3 - (flash_timer // 10))
                     pygame.draw.line(screen, RED, 
-                                   (center_x - size, center_y - size),
-                                   (center_x + size, center_y + size), thickness)
+                                    (center_x - size, center_y - size),
+                                    (center_x + size, center_y + size), thickness)
                     pygame.draw.line(screen, RED, 
-                                   (center_x + size, center_y - size),
-                                   (center_x - size, center_y + size), thickness)
+                                    (center_x + size, center_y - size),
+                                    (center_x - size, center_y + size), thickness)
             
             elif gust.missed:
-                # Draw a negative feedback effect (yellow caution lines)
+                # Draw negative feedback (yellow caution lines)
                 size = min(20, flash_timer * 2)
                 if size > 0:
                     thickness = max(1, 2 - (flash_timer // 10))
                     spacing = 7
                     
-                    # Draw caution stripes
                     for i in range(-2, 3):
                         pygame.draw.line(screen, YELLOW, 
-                                       (center_x + (i*spacing), center_y - size),
-                                       (center_x + (i*spacing), center_y + size), thickness)
+                                        (center_x + (i*spacing), center_y - size),
+                                        (center_x + (i*spacing), center_y + size), thickness)
 
-# Simplified terminal-style boat
+# Draw boat with image or fallback to drawn version
 def draw_boat(screen, boat_offset):
     # Calculate boat bobbing effect
     bob_offset = math.sin(boat_offset) * 2
-    
-    # Boat center point with bobbing (visual effect only)
     boat_center = (BOAT_CENTER[0], BOAT_CENTER[1] + bob_offset)
     
-    # Use the boat sprite image
+    # Try to load and cache boat image
     if not hasattr(draw_boat, 'boat_img'):
         try:
-            # Load the image first time
             boat_img = pygame.image.load("sprites/boat.png").convert_alpha()
-            # Scale it to appropriate size but preserve aspect ratio
+            # Scale image preserving aspect ratio
             original_width, original_height = boat_img.get_size()
-            target_width = BOAT_SIZE + 10  # Slightly larger than the original drawn boat
-            # Calculate height to maintain aspect ratio
+            target_width = BOAT_SIZE + 10
             target_height = int((original_height * target_width) / original_width)
             draw_boat.boat_img = pygame.transform.scale(boat_img, (target_width, target_height))
         except Exception as e:
-            print(f"Boat image error: {e}. Falling back to drawn boat.")
-            # If there's an error, we'll continue with drawn boat
+            print(f"Boat image error: {e}. Using drawn boat.")
             draw_boat.boat_img = None
     
-    # If we successfully loaded the image, use it
+    # Use image if available, otherwise draw the boat
     if hasattr(draw_boat, 'boat_img') and draw_boat.boat_img is not None:
-        # Calculate position to center the boat sprite
         boat_width, boat_height = draw_boat.boat_img.get_size()
         boat_x = boat_center[0] - boat_width // 2
         boat_y = boat_center[1] - boat_height // 2
-        
-        # Blit the boat image at the calculated position
         screen.blit(draw_boat.boat_img, (boat_x, boat_y))
     else:
-        # Fallback to drawing boat if image couldn't be loaded
-        # Draw boat - ASCII-like representation
-        # Boat outline
+        # Draw a simple boat shape
         pygame.draw.lines(screen, GREEN, True, [
             (boat_center[0], boat_center[1] - BOAT_SIZE // 2),  # Top
             (boat_center[0] + BOAT_SIZE // 2, boat_center[1]),  # Right
@@ -149,51 +152,50 @@ def draw_boat(screen, boat_offset):
             (boat_center[0] - BOAT_SIZE // 2, boat_center[1])   # Left
         ], 2)
         
-        # Draw a mast as a simple line
+        # Draw mast and sail
         pygame.draw.line(screen, GREEN, 
                         (boat_center[0], boat_center[1]),
                         (boat_center[0], boat_center[1] - BOAT_SIZE // 1.5), 2)
         
-        # Draw a simple sail as a triangle
         pygame.draw.lines(screen, GREEN, False, [
             (boat_center[0], boat_center[1] - BOAT_SIZE // 1.5),
             (boat_center[0] + BOAT_SIZE // 3, boat_center[1] - BOAT_SIZE // 3),
             (boat_center[0], boat_center[1] - BOAT_SIZE // 3)
         ], 1)
 
-# Draw terminal-style border
+# Draw terminal-style border with corners
 def draw_terminal_border(screen, boat_speed, boat_acceleration, glow_value):
-    # Border color changes with acceleration/speed to indicate danger level
+    # Determine border color based on danger level
     danger_level = max(abs(boat_acceleration) / MAX_ACCELERATION, abs(boat_speed) / MAX_SPEED)
+    
     if danger_level < 0.3:
         border_color = GREEN  # Safe
     elif danger_level < 0.6:
         border_color = YELLOW  # Warning
     else:
         # Pulsing red for high danger
-        pulse = int(155 + 100 * math.sin(glow_value))
-        border_color = (255, pulse, pulse)  # Danger
+        border_color = (255, 155 + 100 * math.sin(glow_value), 155 + 100 * math.sin(glow_value))
     
-    pygame.draw.rect(screen, border_color, (BORDER_MARGIN, BORDER_MARGIN, WIDTH - 2*BORDER_MARGIN, HEIGHT - 2*BORDER_MARGIN), BORDER_THICKNESS)
+    # Draw the main border
+    pygame.draw.rect(screen, border_color, 
+                    (BORDER_MARGIN, BORDER_MARGIN, 
+                     WIDTH - 2*BORDER_MARGIN, HEIGHT - 2*BORDER_MARGIN), 
+                    BORDER_THICKNESS)
     
     # Draw corner characters
-    # Top-left corner
-    pygame.draw.line(screen, border_color, (BORDER_MARGIN, BORDER_MARGIN), (BORDER_MARGIN + CORNER_SIZE, BORDER_MARGIN), 2)
-    pygame.draw.line(screen, border_color, (BORDER_MARGIN, BORDER_MARGIN), (BORDER_MARGIN, BORDER_MARGIN + CORNER_SIZE), 2)
-    # Top-right corner
-    pygame.draw.line(screen, border_color, (WIDTH - BORDER_MARGIN, BORDER_MARGIN), (WIDTH - BORDER_MARGIN - CORNER_SIZE, BORDER_MARGIN), 2)
-    pygame.draw.line(screen, border_color, (WIDTH - BORDER_MARGIN, BORDER_MARGIN), (WIDTH - BORDER_MARGIN, BORDER_MARGIN + CORNER_SIZE), 2)
-    # Bottom-left corner
-    pygame.draw.line(screen, border_color, (BORDER_MARGIN, HEIGHT - BORDER_MARGIN), (BORDER_MARGIN + CORNER_SIZE, HEIGHT - BORDER_MARGIN), 2)
-    pygame.draw.line(screen, border_color, (BORDER_MARGIN, HEIGHT - BORDER_MARGIN), (BORDER_MARGIN, HEIGHT - BORDER_MARGIN - CORNER_SIZE), 2)
-    # Bottom-right corner
-    pygame.draw.line(screen, border_color, (WIDTH - BORDER_MARGIN, HEIGHT - BORDER_MARGIN), (WIDTH - BORDER_MARGIN - CORNER_SIZE, HEIGHT - BORDER_MARGIN), 2)
-    pygame.draw.line(screen, border_color, (WIDTH - BORDER_MARGIN, HEIGHT - BORDER_MARGIN), (WIDTH - BORDER_MARGIN, HEIGHT - BORDER_MARGIN - CORNER_SIZE), 2)
+    corners = [
+        (BORDER_MARGIN, BORDER_MARGIN, True, True),  # Top-left
+        (WIDTH - BORDER_MARGIN, BORDER_MARGIN, True, False),  # Top-right
+        (BORDER_MARGIN, HEIGHT - BORDER_MARGIN, False, True),  # Bottom-left
+        (WIDTH - BORDER_MARGIN, HEIGHT - BORDER_MARGIN, False, False)  # Bottom-right
+    ]
     
-    # Draw title with difficulty indication in the top border
+    for x, y, is_top, is_left in corners:
+        draw_terminal_style_corner(screen, border_color, x, y, CORNER_SIZE, is_top, is_left)
+    
+    # Draw title with difficulty indication
     font = pygame.font.SysFont("Courier New", 16)
     
-    # Title changes based on current difficulty level
     if danger_level < 0.3:
         title_text = " TERMINAL BOAT NAVIGATION "
     elif danger_level < 0.6:
@@ -202,144 +204,155 @@ def draw_terminal_border(screen, boat_speed, boat_acceleration, glow_value):
         title_text = " !!! DANGER: EXTREME CONDITIONS !!! "
         
     title = font.render(title_text, True, border_color, BLACK)
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, BORDER_MARGIN - title.get_height() // 2))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 
+                        BORDER_MARGIN - title.get_height() // 2))
     
-    # Draw labels for the squares
+    # Draw square labels
     small_font = pygame.font.SysFont("Courier New", 12)
     
-    # Label for outer square (controls)
-    control_label = small_font.render("CONTROL ZONE", True, DARK_GREEN)
-    screen.blit(control_label, (
-        OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE // 2 - control_label.get_width() // 2,
-        OUTER_SQUARE_POS[1] - control_label.get_height() - 2
-    ))
+    labels = [
+        ("CONTROL ZONE", DARK_GREEN, 
+         OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE // 2, 
+         OUTER_SQUARE_POS[1] - 2),
+        
+        ("NAVIGATION ZONE", GREEN, 
+         SQUARE_POS[0] + SQUARE_SIZE // 2, 
+         SQUARE_POS[1] - 2)
+    ]
     
-    # Label for inner square (navigation)
-    nav_label = small_font.render("NAVIGATION ZONE", True, GREEN)
-    screen.blit(nav_label, (
-        SQUARE_POS[0] + SQUARE_SIZE // 2 - nav_label.get_width() // 2,
-        SQUARE_POS[1] - nav_label.get_height() - 2
-    ))
+    for text, color, x, y in labels:
+        label = small_font.render(text, True, color)
+        screen.blit(label, (x - label.get_width() // 2, y - label.get_height()))
 
 # Draw progress and speed meters
 def draw_meters(screen, boat_speed, boat_acceleration, current_distance, glow_value):
     font = pygame.font.SysFont("Courier New", 14)
     
-    # Draw speed meter in top-left corner
+    # Draw speed meter in top-left
     speed_meter_width = 100
     speed_meter_height = 20
     speed_meter_x = 20
     speed_meter_y = 40
     
     # Draw meter background
-    pygame.draw.rect(screen, DARK_GRAY, (speed_meter_x, speed_meter_y, speed_meter_width, speed_meter_height))
+    pygame.draw.rect(screen, DARK_GRAY, 
+                    (speed_meter_x, speed_meter_y, speed_meter_width, speed_meter_height))
     
-    # Calculate fill based on speed (centered at zero, expands left for negative, right for positive)
+    # Calculate speed meter fill
+    center_x = speed_meter_x + speed_meter_width / 2
     if boat_speed >= 0:
         fill_width = int((boat_speed / MAX_SPEED) * (speed_meter_width / 2))
-        fill_x = speed_meter_width / 2 + speed_meter_x
-        pygame.draw.rect(screen, GREEN, (fill_x, speed_meter_y, fill_width, speed_meter_height))
+        fill_x = center_x
+        fill_color = GREEN
     else:
         fill_width = int((boat_speed / MIN_SPEED) * (speed_meter_width / 2))
-        fill_x = speed_meter_width / 2 + speed_meter_x - fill_width
-        pygame.draw.rect(screen, RED, (fill_x, speed_meter_y, fill_width, speed_meter_height))
+        fill_x = center_x - fill_width
+        fill_color = RED
     
-    # Draw center line
-    center_x = speed_meter_x + speed_meter_width / 2
-    pygame.draw.line(screen, WHITE, (center_x, speed_meter_y), (center_x, speed_meter_y + speed_meter_height), 1)
+    if fill_width > 0:
+        pygame.draw.rect(screen, fill_color, 
+                        (fill_x, speed_meter_y, fill_width, speed_meter_height))
     
-    # Draw border
-    pygame.draw.rect(screen, GREEN, (speed_meter_x, speed_meter_y, speed_meter_width, speed_meter_height), 1)
+    # Draw center line and border
+    pygame.draw.line(screen, WHITE, 
+                    (center_x, speed_meter_y), 
+                    (center_x, speed_meter_y + speed_meter_height), 1)
     
-    # Draw speed text
-    speed_text = font.render(f"SPEED: {int(boat_speed)}", True, GREEN)
-    screen.blit(speed_text, (speed_meter_x, speed_meter_y - 20))
+    pygame.draw.rect(screen, GREEN, 
+                    (speed_meter_x, speed_meter_y, speed_meter_width, speed_meter_height), 1)
     
-    # Draw acceleration text
-    accel_text = font.render(f"ACCEL: {boat_acceleration:.2f}", True, GREEN)
-    screen.blit(accel_text, (speed_meter_x, speed_meter_y + 25))
+    # Draw speed and acceleration text
+    texts = [
+        (f"SPEED: {int(boat_speed)}", speed_meter_x, speed_meter_y - 20),
+        (f"ACCEL: {boat_acceleration:.2f}", speed_meter_x, speed_meter_y + 25)
+    ]
     
-    # Draw vertical progress bar on the right side of the screen
+    for text, x, y in texts:
+        screen.blit(font.render(text, True, GREEN), (x, y))
+    
+    # Draw vertical progress bar
     progress_width = 20
     progress_height = HEIGHT - 100
     progress_x = WIDTH - 40
     progress_y = 50
     
     # Draw meter background
-    pygame.draw.rect(screen, DARK_GRAY, (progress_x, progress_y, progress_width, progress_height))
+    pygame.draw.rect(screen, DARK_GRAY, 
+                    (progress_x, progress_y, progress_width, progress_height))
     
-    # Calculate fill based on progress (fills from bottom to top)
+    # Calculate progress fill
     progress_percentage = min(1.0, current_distance / TOTAL_DISTANCE)
     fill_height = int(progress_percentage * progress_height)
-    fill_y = progress_y + progress_height - fill_height  # Start from bottom
+    fill_y = progress_y + progress_height - fill_height
     
-    # Progress bar color changes with speed
+    # Determine progress color based on speed
     if boat_speed < 0:
-        # Moving backward - red
-        progress_color = RED
+        progress_color = RED  # Moving backward
     elif boat_speed < MAX_SPEED * 0.3:
-        # Slow - green
-        progress_color = GREEN
+        progress_color = GREEN  # Slow
     elif boat_speed < MAX_SPEED * 0.7:
-        # Medium - yellow
-        progress_color = YELLOW
+        progress_color = YELLOW  # Medium
     else:
         # Fast - pulsing cyan
         pulse = int(155 + 100 * math.sin(glow_value))
-        progress_color = (0, 255, pulse)  # Cyan pulse
+        progress_color = (0, 255, pulse)
     
-    pygame.draw.rect(screen, progress_color, (progress_x, fill_y, progress_width, fill_height))
+    # Draw progress fill
+    if fill_height > 0:
+        pygame.draw.rect(screen, progress_color, 
+                        (progress_x, fill_y, progress_width, fill_height))
     
-    # Add distance markers (ticks) along the progress bar
+    # Draw distance markers
     for i in range(1, 10):
         tick_y = progress_y + i * (progress_height / 10)
-        tick_length = 5
         pygame.draw.line(screen, WHITE, 
-                        (progress_x - tick_length, tick_y), 
+                        (progress_x - 5, tick_y), 
                         (progress_x, tick_y), 1)
     
     # Draw border
-    pygame.draw.rect(screen, GREEN, (progress_x, progress_y, progress_width, progress_height), 1)
+    pygame.draw.rect(screen, GREEN, 
+                    (progress_x, progress_y, progress_width, progress_height), 1)
     
     # Draw position arrow indicator
     arrow_size = 8
-    arrow_x = progress_x - arrow_size - 2  # Position left of the progress bar
-    arrow_y = fill_y - arrow_size // 2  # Center on current progress
+    arrow_x = progress_x - arrow_size - 2
+    arrow_y = fill_y - arrow_size // 2
     
     # Keep arrow within bar bounds
     arrow_y = max(progress_y, min(progress_y + progress_height - arrow_size, arrow_y))
     
-    # Arrow color and animation based on speed
+    # Arrow color and animation
     arrow_color = progress_color
     arrow_wobble = 0
     if abs(boat_speed) > MAX_SPEED * 0.5:
-        # Add wobble to arrow at high speeds
         arrow_wobble = int(math.sin(glow_value * 3) * 3)
     
-    # Draw arrow pointing right (towards progress bar)
+    # Draw arrow pointing to progress bar
     pygame.draw.polygon(screen, arrow_color, [
-        (arrow_x + arrow_wobble, arrow_y),  # Left point
-        (arrow_x + arrow_size + arrow_wobble, arrow_y + arrow_size // 2),  # Right point (tip)
-        (arrow_x + arrow_wobble, arrow_y + arrow_size)  # Bottom point
+        (arrow_x + arrow_wobble, arrow_y),
+        (arrow_x + arrow_size + arrow_wobble, arrow_y + arrow_size // 2),
+        (arrow_x + arrow_wobble, arrow_y + arrow_size)
     ])
     
-    # Draw destination label at top
-    dest_text = font.render("DEST", True, GREEN)
-    screen.blit(dest_text, (progress_x - 5, progress_y - 20))
+    # Draw destination and distance labels
+    labels = [
+        ("DEST", progress_x - 5, progress_y - 20),
+        (f"{int(TOTAL_DISTANCE - current_distance)}", progress_x - 5, progress_y + progress_height + 5)
+    ]
     
-    # Draw distance remaining at bottom
-    remaining = int(TOTAL_DISTANCE - current_distance)
-    if remaining > 0:
-        dist_text = font.render(f"{remaining}", True, GREEN)
-        screen.blit(dist_text, (progress_x - 5, progress_y + progress_height + 5))
+    for text, x, y in labels:
+        if text.isdigit() and int(text) <= 0:
+            continue  # Skip showing distance if we've arrived
+        screen.blit(font.render(text, True, GREEN), (x, y))
     
-    # Create a rectangle object for the progress bar (used for drawing hydra indicators)
-    progress_rect = pygame.Rect(progress_x, progress_y, progress_width, progress_height)
-    
-    return progress_rect
+    # Return progress bar rect for hydra indicators
+    return pygame.Rect(progress_x, progress_y, progress_width, progress_height)
 
 def draw_status_line(screen, bar_position):
+    # Bar position labels
+    bar_labels = ["TOP", "RIGHT", "BOTTOM", "LEFT"]
+    
     font = pygame.font.SysFont("Courier New", 16)
-    status_line = f"BAR: {'TOP' if bar_position == 0 else 'RIGHT' if bar_position == 1 else 'BOTTOM' if bar_position == 2 else 'LEFT'}"
+    status_line = f"BAR: {bar_labels[bar_position]}"
     status_text = font.render(status_line, True, GREEN)
-    screen.blit(status_text, (20, HEIGHT - 40)) 
+    screen.blit(status_text, (20, HEIGHT - 40))

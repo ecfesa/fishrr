@@ -3,6 +3,18 @@ import math
 import random
 from constants import *
 
+# Function to play a sound effect
+def play_sound(sound_file):
+    # Make sure to add .wav extension if not already present
+    if not sound_file.endswith('.wav'):
+        sound_file += '.wav'
+    try:
+        pygame.mixer.Sound(f"sounds/{sound_file}").play()
+    except FileNotFoundError:
+        print(f"Warning: Sound file 'sounds/{sound_file}' not found")
+    except Exception as e:
+        print(f"Error playing sound: {e}")
+
 # Wind gust class - Significantly harder with extreme speed/complexity at high accelerations
 class WindGust:
     def __init__(self, direction=None, boat_acceleration=0, difficulty_factor=1.0):
@@ -99,6 +111,7 @@ class WindGust:
                 
                 self.collected = True
                 self.active = False
+                play_sound("fullWind")
                 return boost_amount
                 
             # If the bar is facing the same direction as the gust, it blocks it
@@ -114,6 +127,7 @@ class WindGust:
                 
                 self.blocked = True
                 self.active = False
+                play_sound("halfWind")
                 return penalty_amount
             else:
                 # Neither collected nor blocked - wind passes by
@@ -126,6 +140,7 @@ class WindGust:
                 if abs(boat_speed) > MAX_SPEED * 0.6:
                     miss_penalty = -0.25  # Half of -0.5
                 
+                play_sound("missWind")
                 return miss_penalty
         
         # Check if gust is outside the square completely
