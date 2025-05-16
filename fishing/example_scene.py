@@ -1,5 +1,6 @@
 import pygame
 from .fishing_minigame import FishingMinigame
+from utils.txtlib import Text, BEGIN, END, COLOR, BOLD
 
 class FishingScene:
     def __init__(self, screen: pygame.Surface, font_path: str):
@@ -10,9 +11,14 @@ class FishingScene:
         # Create fishing minigame instance
         self.fishing_minigame = FishingMinigame(screen, font_path)
         
+        # Create text renderer
+        self.info_text = Text((self.width, 40), font_path, 24)
+        self.info_text.background_color = (0, 0, 0, 0)  # Transparent background
+        
         # Colors - Terminal style
         self.BACKGROUND = (20, 20, 40)
         self.GRID_COLOR = (40, 40, 60)
+        self.TEXT_COLOR = (180, 180, 220)
         
     def draw_background(self):
         # Fill with dark background color
@@ -28,6 +34,15 @@ class FishingScene:
         # Draw vertical grid lines
         for x in range(0, self.width, grid_spacing):
             pygame.draw.line(self.screen, self.GRID_COLOR, (x, 0), (x, self.height), 1)
+            
+        # Draw info text at the bottom
+        self.info_text.clear()
+        self.info_text.html("SPACE to start fishing | ESC to exit")
+        self.info_text.add_style(0, len("SPACE to start fishing | ESC to exit"), COLOR, self.TEXT_COLOR)
+        self.info_text.update()
+        
+        text_rect = self.info_text.area.get_rect(midbottom=(self.width // 2, self.height - 10))
+        self.screen.blit(self.info_text.area, text_rect)
     
     def update(self):
         self.fishing_minigame.update()

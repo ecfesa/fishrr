@@ -4,13 +4,16 @@ import math
 from typing import List, Optional, Tuple
 from .fishable_items import FishableItem, get_random_fishable, FishableType
 
+from utils.txtlib import Text, BEGIN, END, FONT, COLOR, BOLD, SIZE
+
 class FishingState:
     IDLE = 0         # Not fishing
-    CASTING = 1      # Using the swing meter
-    WAITING = 2      # Waiting for a bite
-    QTE = 3          # Quick Time Event when fish bites
-    BATTLE = 4       # Fishing battle with the bar mechanic
-    RESULT = 5       # Showing result
+    TUTORIAL = 1     # Show tutorial
+    CASTING = 2      # Using the swing meter
+    WAITING = 3      # Waiting for a bite
+    QTE = 4          # Quick Time Event when fish bites
+    BATTLE = 5       # Fishing battle with the bar mechanic
+    RESULT = 6       # Showing result
 
 class FishingMinigame:
     def __init__(self, screen: pygame.Surface, font_path: str):
@@ -21,6 +24,13 @@ class FishingMinigame:
         # Load font
         self.font = pygame.font.Font(font_path, 32)
         self.small_font = pygame.font.Font(font_path, 24)
+        
+        # Text renderers - only for large/complex texts
+        self.message_text = Text((self.width, 200), font_path, 32)  # Increased height for fish details
+        self.message_text.background_color = (0, 0, 0, 0)  # Transparent background
+        
+        self.tutorial_text = Text((600, 300), font_path, 24)
+        self.tutorial_text.background_color = (0, 0, 0, 0)
         
         # Colors - Using a terminal-like color scheme
         self.WHITE = (230, 230, 230)
@@ -50,7 +60,7 @@ class FishingMinigame:
         # QTE state
         self.qte_start_time = 0
         self.qte_duration = 1500  # Increased for better response time
-        self.qte_success_window = 750  # Increased for easier success
+        self.qte_success_window = 200  # Increased for easier success
         self.qte_clicked = False
         
         # Fishing battle state
@@ -62,6 +72,7 @@ class FishingMinigame:
         self.battle_score = 0  # Current score in the battle
         self.max_battle_score = 100  # Score needed to catch fish
         self.battle_timer = 0  # Timer for difficulty increases
+        self.battle_timeout = 900  # 15 seconds at 60fps before fish escapes
         
         # Fishing line state
         self.line_end_pos = self.rod_start_pos
@@ -73,8 +84,29 @@ class FishingMinigame:
         self.message = ""
         self.message_timer = 0
         
+        # Tutorial state
+        self.tutorial_step = 0
+        self.tutorial_timer = 0
+        self.tutorial_count = 0  # Count how many times tutorial has been shown
+        self.battle_tutorial_count = 0  # Count how many times battle tutorial has been shown
+        self.max_tutorial_count = 2  # Maximum times to show tutorials
+        
+        # Waiting timer after casting
+        self.waiting_timer = 0
+        self.min_waiting_time = 60  # Minimum frames to wait after casting
+        
+        # Pre-rendered text surfaces (for performance)
+        self.text_cache = {}
+        
         # Inventory
         self.inventory: List[FishableItem] = []
+
+    def get_text_surface(self, text, font, color):
+        """Cache and return text surfaces for better performance"""
+        key = (text, font, color)
+        if key not in self.text_cache:
+            self.text_cache[key] = font.render(text, True, color)
+        return self.text_cache[key]
 
     def draw_rod(self):
         # Draw fishing rod as a line
@@ -117,6 +149,12 @@ class FishingMinigame:
             indicator_pos = y + meter_height - (self.cast_power / self.max_power) * meter_height
             indicator_height = 10
             pygame.draw.rect(self.screen, self.CYAN, (x - 10, indicator_pos - indicator_height // 2, meter_width + 20, indicator_height))
+            
+            # Draw instruction - only for the first two times
+            if self.tutorial_count < self.max_tutorial_count:
+                text_surf = self.get_text_surface("HOLD SPACE, RELEASE TO CAST", self.font, self.YELLOW)
+                text_rect = text_surf.get_rect(center=(self.width // 2, y - 40))
+                self.screen.blit(text_surf, text_rect)
         
         # Always show cast quality message when it exists
         if self.cast_quality and self.cast_quality_timer > 0:
@@ -127,10 +165,11 @@ class FishingMinigame:
                 color = self.YELLOW
             else:
                 color = self.RED
-                
-            text = self.font.render(self.cast_quality, True, color)
-            text_rect = text.get_rect(center=(self.width // 2, self.height // 3))
-            self.screen.blit(text, text_rect)
+            
+            # Use pygame direct rendering for this small text
+            text_surf = self.get_text_surface(self.cast_quality, self.font, color)
+            text_rect = text_surf.get_rect(center=(self.width // 2, self.height // 3))
+            self.screen.blit(text_surf, text_rect)
 
     def draw_qte(self):
         if self.state == FishingState.QTE:
@@ -141,25 +180,31 @@ class FishingMinigame:
             # Draw QTE bar
             bar_width = 400
             bar_height = 40
+            moving_bar_width = 10
             x = (self.width - bar_width) // 2
-            y = self.height // 2
+            y = self.height // 1.5
             
             # Draw background
             pygame.draw.rect(self.screen, self.BLACK, (x, y, bar_width, bar_height), 0)
             pygame.draw.rect(self.screen, self.WHITE, (x, y, bar_width, bar_height), 2)
             
-            # Draw progress
-            pygame.draw.rect(self.screen, self.RED, (x, y, bar_width * progress, bar_height))
+            # Draw progress as a moving bar
+            pygame.draw.rect(self.screen, self.YELLOW, (x+progress*bar_width, y, moving_bar_width, bar_height))
             
-            # Draw success window
-            success_start = (self.qte_duration - self.qte_success_window) / self.qte_duration
+            # Draw success window in the middle of the QTE bar
+            success_middle = 0.5  # Middle of the bar
+            success_start = success_middle - (self.qte_success_window / self.qte_duration / 2)
             success_width = (self.qte_success_window / self.qte_duration) * bar_width
-            pygame.draw.rect(self.screen, self.GREEN, (x + bar_width * success_start, y, success_width, bar_height), 3)
             
-            # Draw instruction
-            text = self.font.render("PRESS SPACE!", True, self.YELLOW)
-            text_rect = text.get_rect(center=(self.width // 2, y - 40))
-            self.screen.blit(text, text_rect)
+            # Ensure the success window is within the bar
+            success_start = max(0, min(success_start, 1 - (self.qte_success_window / self.qte_duration)))
+            
+            pygame.draw.rect(self.screen, self.RED, (x + bar_width * success_start, y, success_width, bar_height), 2)
+            
+            # Draw instruction - always show this one
+            text_surf = self.get_text_surface("PRESS SPACE!", self.font, self.YELLOW)
+            text_rect = text_surf.get_rect(center=(self.width // 2, y - 40))
+            self.screen.blit(text_surf, text_rect)
 
     def draw_battle(self):
         if self.state == FishingState.BATTLE:
@@ -187,7 +232,7 @@ class FishingMinigame:
             score_width = 300
             score_height = 30
             score_x = (self.width - score_width) // 2
-            score_y = area_y + bar_height + 30
+            score_y = area_y + bar_height + 50  # Moved down for better visibility
             
             # Draw score background
             pygame.draw.rect(self.screen, self.BLACK, (score_x, score_y, score_width, score_height), 0)
@@ -199,20 +244,32 @@ class FishingMinigame:
             
             # Draw score text
             score_text = f"{int(self.battle_score)}/{int(self.max_battle_score)}"
-            text = self.font.render(score_text, True, self.WHITE)
-            text_rect = text.get_rect(center=(score_x + score_width // 2, score_y + score_height // 2))
-            self.screen.blit(text, text_rect)
+            text_surf = self.get_text_surface(score_text, self.font, self.WHITE)
+            text_rect = text_surf.get_rect(center=(score_x + score_width // 2, score_y + score_height // 2))
+            self.screen.blit(text_surf, text_rect)
             
-            # Draw instruction
-            text = self.font.render("HOLD SPACE TO RAISE BAR", True, self.YELLOW)
-            text_rect = text.get_rect(center=(self.width // 2, area_y - 40))
-            self.screen.blit(text, text_rect)
+            # Draw timeout timer
+            remaining_time = (self.battle_timeout - self.battle_timer) // 60  # Convert to seconds
+            timer_text = f"Time: {remaining_time}s"
+            timer_surf = self.get_text_surface(timer_text, self.small_font, self.WHITE)
+            timer_rect = timer_surf.get_rect(topright=(self.width - 20, 20))
+            self.screen.blit(timer_surf, timer_rect)
+            
+            # Draw instruction - only for the first two battle tutorials
+            if self.battle_tutorial_count < self.max_tutorial_count:
+                text_surf = self.get_text_surface("HOLD SPACE TO RAISE BAR", self.font, self.YELLOW)
+                text_rect = text_surf.get_rect(center=(self.width // 2, area_y - 40))
+                self.screen.blit(text_surf, text_rect)
 
     def draw_message(self):
         if self.message and self.message_timer > 0:
             # Draw a background for the message
-            text = self.font.render(self.message, True, self.WHITE)
-            text_rect = text.get_rect(center=(self.width // 2, self.height // 4))
+            self.message_text.clear()
+            self.message_text.html(self.message)
+            self.message_text.add_style(0, len(self.message), COLOR, self.WHITE)
+            self.message_text.update()
+            
+            text_rect = self.message_text.area.get_rect(center=(self.width // 2, self.height // 4))
             
             # Add padding
             padding = 20
@@ -226,16 +283,55 @@ class FishingMinigame:
             # Draw background and text
             pygame.draw.rect(self.screen, self.BLACK, bg_rect, 0)
             pygame.draw.rect(self.screen, self.WHITE, bg_rect, 2)
-            self.screen.blit(text, text_rect)
+            self.screen.blit(self.message_text.area, text_rect)
+            
+    def draw_tutorial(self):
+        if self.state == FishingState.TUTORIAL:
+            # Create tutorial text based on current step
+            tutorial_messages = [
+                "FISHING TUTORIAL\n\n1. Hold SPACE to charge the casting meter\n2. Release SPACE to cast your line\n3. When a fish bites, press SPACE when the marker\n   is in the red zone\n4. During the battle, keep the bar in the yellow zone\n   by holding SPACE to raise the bar\n\nPress SPACE to continue",
+                "CASTING TIPS\n\n- Perfect casts (green zone) give better fish chances\n- Good casts (yellow zone) give average chances\n- Weak casts (red zone) give lower chances\n\nPress SPACE to start fishing"
+            ]
+            
+            # Update tutorial text
+            self.tutorial_text.clear()
+            self.tutorial_text.html(tutorial_messages[self.tutorial_step])
+            self.tutorial_text.add_style(0, tutorial_messages[self.tutorial_step].find("\n"), COLOR, self.YELLOW)
+            self.tutorial_text.add_style(0, tutorial_messages[self.tutorial_step].find("\n"), BOLD)
+            self.tutorial_text.update()
+            
+            # Draw text with background
+            text_rect = self.tutorial_text.area.get_rect(center=(self.width // 2, self.height // 2))
+            
+            # Add padding
+            padding = 20
+            bg_rect = pygame.Rect(
+                text_rect.left - padding,
+                text_rect.top - padding,
+                text_rect.width + padding * 2,
+                text_rect.height + padding * 2
+            )
+            
+            # Draw background and text
+            pygame.draw.rect(self.screen, self.BLACK, bg_rect, 0)
+            pygame.draw.rect(self.screen, self.WHITE, bg_rect, 2)
+            self.screen.blit(self.tutorial_text.area, text_rect)
 
     def start_fishing(self):
-        self.state = FishingState.CASTING
-        self.cast_power = 0
-        self.power_increasing = True
-        self.cast_quality = ""
-        self.cast_quality_timer = 0
-        self.message = "Hold SPACE to charge, release to cast!"
-        self.message_timer = 120
+        # Show tutorial first if we haven't shown it twice yet
+        if self.tutorial_count < self.max_tutorial_count:
+            self.state = FishingState.TUTORIAL
+            self.tutorial_step = 0
+            self.tutorial_timer = 0
+            self.tutorial_count += 1
+        else:
+            self.state = FishingState.CASTING
+            self.cast_power = 0
+            self.power_increasing = True
+            self.cast_quality = ""
+            self.cast_quality_timer = 0
+            self.message = "Hold SPACE to charge, release to cast!"
+            self.message_timer = 60
 
     def cast_line(self):
         # Determine cast quality based on power
@@ -262,8 +358,11 @@ class FishingMinigame:
         self.state = FishingState.WAITING
         self.cast_quality = quality
         self.cast_quality_timer = 120  # Show quality longer
-        self.message = "Waiting for a bite..."
-        self.message_timer = 60
+        self.message = f"{quality}\nWaiting for a bite..."
+        self.message_timer = 120
+        
+        # Set waiting timer
+        self.waiting_timer = self.min_waiting_time
         
         # Adjust the bite chance based on cast quality
         self.bite_chance = 0.03 * quality_bonus  # Increased base chance
@@ -282,7 +381,7 @@ class FishingMinigame:
             self.state = FishingState.QTE
             self.qte_start_time = pygame.time.get_ticks()
             self.qte_clicked = False
-            self.message = "Fish on! Press SPACE quickly!"
+            self.message = "Fish on! Press SPACE when the marker is in the red zone!"
             self.message_timer = 60
 
     def start_battle(self):
@@ -290,6 +389,11 @@ class FishingMinigame:
         self.battle_bar_pos = 50
         self.battle_bar_velocity = 0
         self.battle_zone_pos = 50
+        self.battle_timer = 0  # Reset battle timer
+        
+        # Increment battle tutorial count
+        if self.battle_tutorial_count < self.max_tutorial_count:
+            self.battle_tutorial_count += 1
         
         # Set difficulty based on fish rarity but with smaller differences
         fish_difficulty = self.current_fish.rarity  # 0.0 to 1.0
@@ -304,7 +408,6 @@ class FishingMinigame:
         self.max_battle_score = base_score * (1 + weight_factor + (0.5 * (1 - fish_difficulty)))
         
         self.battle_score = 0
-        self.battle_timer = 0
         
         self.message = "Keep the bar in the yellow zone!"
         self.message_timer = 120
@@ -320,6 +423,27 @@ class FishingMinigame:
         self.state = FishingState.RESULT
         self.current_fish = None
 
+    def update_tutorial(self):
+        # Check for space key to advance tutorial
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_SPACE] and self.tutorial_timer <= 0:
+            self.tutorial_step += 1
+            self.tutorial_timer = 20  # Prevent multiple advances
+            
+            # If we've gone through all tutorial steps, start fishing
+            if self.tutorial_step >= 2:
+                self.state = FishingState.CASTING
+                self.cast_power = 0
+                self.power_increasing = True
+                self.cast_quality = ""
+                self.cast_quality_timer = 0
+                self.message = "Hold SPACE to charge, release to cast!"
+                self.message_timer = 60
+        
+        # Update tutorial timer
+        if self.tutorial_timer > 0:
+            self.tutorial_timer -= 1
+
     def update_casting(self):
         # Update power when holding space
         keys = pygame.key.get_pressed()
@@ -334,7 +458,12 @@ class FishingMinigame:
                     self.power_increasing = True
     
     def update_waiting(self):
-        # Check for a bite
+        # Update waiting timer
+        if self.waiting_timer > 0:
+            self.waiting_timer -= 1
+            return
+            
+        # Check for a bite only after waiting timer expires
         if random.random() < self.bite_chance:
             self.fish_bite()
     
@@ -348,16 +477,26 @@ class FishingMinigame:
             self.complete_fishing(False)
         
         # Check if in success window
-        success_start = self.qte_duration - self.qte_success_window
-        in_window = elapsed >= success_start
+        success_middle = self.qte_duration * 0.5  # Middle of the duration
+        success_start = success_middle - (self.qte_success_window / 2)
+        success_end = success_middle + (self.qte_success_window / 2)
+        in_window = success_start <= elapsed <= success_end
         
         # If player clicked in success window
         if self.qte_clicked and in_window:
             self.start_battle()
+        elif self.qte_clicked and not in_window:
+            # Failed QTE if clicked outside window
+            self.complete_fishing(False)
     
     def update_battle(self):
         # Update battle timer
         self.battle_timer += 1
+        
+        # Check for timeout
+        if self.battle_timer >= self.battle_timeout:
+            self.complete_fishing(False)
+            return
         
         # Move the target zone occasionally
         if self.battle_timer % 90 == 0:  # Slowed down movement
@@ -399,7 +538,7 @@ class FishingMinigame:
         # Calculate overlap
         overlap = min(bar_bottom, zone_bottom) - max(bar_top, zone_top)
         
-        # Add score based on overlap
+        # Calculate score based on position within zone
         if overlap > 0:
             # Max score when centered in zone
             center_distance = abs(self.battle_bar_pos - self.battle_zone_pos)
@@ -407,12 +546,16 @@ class FishingMinigame:
             center_factor = max(0, center_factor)
             
             # Add score - increased rate
-            score_rate = 0.7 * (1 + center_factor)
+            score_rate = 0.6 * (1 + center_factor)
             self.battle_score += score_rate
             
             # Check for completion
             if self.battle_score >= self.max_battle_score:
                 self.complete_fishing(True)
+        else:
+            # Not in zone, lose score
+            if self.battle_score > 0:
+                self.battle_score -= self.battle_score * 0.05
     
     def update_result(self):
         # After showing result, go back to idle state
@@ -421,7 +564,9 @@ class FishingMinigame:
 
     def update(self):
         # Update state-specific logic
-        if self.state == FishingState.CASTING:
+        if self.state == FishingState.TUTORIAL:
+            self.update_tutorial()
+        elif self.state == FishingState.CASTING:
             self.update_casting()
         elif self.state == FishingState.WAITING:
             self.update_waiting()
@@ -444,7 +589,9 @@ class FishingMinigame:
         self.draw_rod()
         
         # Draw state-specific elements
-        if self.state == FishingState.CASTING:
+        if self.state == FishingState.TUTORIAL:
+            self.draw_tutorial()
+        elif self.state == FishingState.CASTING:
             self.draw_casting_meter()
         elif self.state == FishingState.QTE:
             self.draw_qte()
