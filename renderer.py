@@ -2,6 +2,16 @@ import pygame
 import math
 from constants import *
 
+# Load custom font
+def get_font(size):
+    """Load the custom JetBrains Mono font with the specified size"""
+    try:
+        return pygame.font.Font("font/JetBrainsMono-Regular.ttf", size)
+    except:
+        # Fallback to system font if custom font fails to load
+        print("Warning: Could not load custom font in renderer. Using system font instead.")
+        return pygame.font.SysFont("Courier New", size)
+
 # Common drawing utilities
 def draw_terminal_style_corner(screen, color, x, y, size, is_top=True, is_left=True):
     """Draw a terminal-style corner (L-shape) with given parameters"""
@@ -30,7 +40,9 @@ def draw_glow_color(base_color, glow_value, intensity=100):
 
 # Draw the bar based on its position with pulsing glow effect
 def draw_bar(screen, bar_position, glow_value):
-    glow_color = draw_glow_color(GREEN, glow_value)
+    # Calculate pulsing glow effect
+    glow_intensity = 155 + int(100 * math.sin(glow_value))
+    glow_color = (0, glow_intensity, 0)
     
     # Draw the bar on the outer square
     bar_positions = [
@@ -194,7 +206,7 @@ def draw_terminal_border(screen, boat_speed, boat_acceleration, glow_value):
         draw_terminal_style_corner(screen, border_color, x, y, CORNER_SIZE, is_top, is_left)
     
     # Draw title with difficulty indication
-    font = pygame.font.SysFont("Courier New", 16)
+    font = get_font(16)
     
     if danger_level < 0.3:
         title_text = " TERMINAL BOAT NAVIGATION "
@@ -202,13 +214,36 @@ def draw_terminal_border(screen, boat_speed, boat_acceleration, glow_value):
         title_text = " !!! WARNING: INCREASING TURBULENCE !!! "
     else:
         title_text = " !!! DANGER: EXTREME CONDITIONS !!! "
-        
-    title = font.render(title_text, True, border_color, BLACK)
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 
-                        BORDER_MARGIN - title.get_height() // 2))
+    
+    # Draw text with background
+    text_surf = font.render(title_text, True, border_color)
+    text_width = text_surf.get_width()
+    text_height = text_surf.get_height()
+    
+    # Position text at top center
+    text_x = WIDTH // 2 - text_width // 2
+    text_y = BORDER_MARGIN - text_height // 2
+    
+    # Draw background
+    bg_margin = 5
+    pygame.draw.rect(screen, BLACK, 
+                    (text_x - bg_margin, 
+                     text_y - bg_margin // 2, 
+                     text_width + bg_margin * 2, 
+                     text_height + bg_margin))
+    
+    # Draw text
+    screen.blit(text_surf, (text_x, text_y))
+    
+    # Draw small version info in bottom right
+    small_font = get_font(12)
+    version_text = "v1.0"
+    version_surf = small_font.render(version_text, True, DARK_GREEN)
+    screen.blit(version_surf, (WIDTH - BORDER_MARGIN - version_surf.get_width() - 10, 
+                             HEIGHT - BORDER_MARGIN - version_surf.get_height() - 5))
     
     # Draw square labels
-    small_font = pygame.font.SysFont("Courier New", 12)
+    small_font = get_font(12)
     
     labels = [
         ("CONTROL ZONE", DARK_GREEN, 
@@ -226,7 +261,7 @@ def draw_terminal_border(screen, boat_speed, boat_acceleration, glow_value):
 
 # Draw progress and speed meters
 def draw_meters(screen, boat_speed, boat_acceleration, current_distance, glow_value):
-    font = pygame.font.SysFont("Courier New", 14)
+    font = get_font(14)
     
     # Draw speed meter in top-left
     speed_meter_width = 100
@@ -350,9 +385,15 @@ def draw_meters(screen, boat_speed, boat_acceleration, current_distance, glow_va
 
 def draw_status_line(screen, bar_position):
     # Bar position labels
-    bar_labels = ["TOP", "RIGHT", "BOTTOM", "LEFT"]
+    font = get_font(16)
     
-    font = pygame.font.SysFont("Courier New", 16)
-    status_line = f"BAR: {bar_labels[bar_position]}"
-    status_text = font.render(status_line, True, GREEN)
-    screen.blit(status_text, (20, HEIGHT - 40))
+    # Position names
+    positions = ["FORWARD", "STARBOARD", "AFT", "PORT"]
+    
+    # Draw the current position
+    status_text = f"BAR: {positions[bar_position]}"
+    status_surf = font.render(status_text, True, GREEN)
+    
+    # Position centered at bottom
+    screen.blit(status_surf, (WIDTH // 2 - status_surf.get_width() // 2, 
+                            HEIGHT - BORDER_MARGIN - 20))

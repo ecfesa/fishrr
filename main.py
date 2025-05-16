@@ -29,16 +29,26 @@ sounds = {
 
 # Set volume levels
 for sound in sounds.values():
-    sound.set_volume(0.3)  # Reduce volume to 30% instead of 70%
+    sound.set_volume(0.15)  # Reduce volume to 15% instead of 30%
 
 # Set specific volumes for certain sounds
-sounds['gameOver'].set_volume(0.4)  # Game over is slightly louder
-sounds['startGame'].set_volume(0.4)  # Start game is slightly louder
+sounds['gameOver'].set_volume(0.2)  # Game over is slightly louder
+sounds['startGame'].set_volume(0.2)  # Start game is slightly louder
 
 # Set up the display
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Terminal Boat Navigation")
 clock = pygame.time.Clock()
+
+# Load custom font
+def get_font(size):
+    """Load the custom JetBrains Mono font with the specified size"""
+    try:
+        return pygame.font.Font("font/JetBrainsMono-Regular.ttf", size)
+    except:
+        # Fallback to system font if custom font fails to load
+        print("Warning: Could not load custom font. Using system font instead.")
+        return pygame.font.SysFont("Courier New", size)
 
 def draw_menu():
     """Draw the main menu screen with game title and options"""
@@ -60,14 +70,14 @@ def draw_menu():
     for x, y, is_top, is_left in corners:
         draw_terminal_style_corner(screen, GREEN, x, y, CORNER_SIZE, is_top, is_left)
     
-    # Create common font objects to reuse
-    title_font = pygame.font.SysFont("Courier New", 38)
-    secondary_font = pygame.font.SysFont("Courier New", 18)
-    danger_font = pygame.font.SysFont("Courier New", 20)
-    prompt_font = pygame.font.SysFont("Courier New", 16)
-    controls_font = pygame.font.SysFont("Courier New", 14)
-    options_font = pygame.font.SysFont("Courier New", 20)
-    mission_font = pygame.font.SysFont("Courier New", 14)  # Add missing mission font
+    # Create common font objects to reuse with custom font
+    title_font = get_font(38)
+    secondary_font = get_font(18)
+    danger_font = get_font(20)
+    prompt_font = get_font(16)
+    controls_font = get_font(14)
+    options_font = get_font(20)
+    mission_font = get_font(14)
     
     # Draw titles
     title_y = HEIGHT // 6 - 10
@@ -184,7 +194,7 @@ def draw_menu():
     screen.blit(controls_box, (WIDTH // 2 - controls_box_width // 2, controls_y - 5))
     
     # Draw controls title
-    controls_title = pygame.font.SysFont("Courier New", 16).render("CONTROLS:", True, GREEN)
+    controls_title = get_font(16).render("CONTROLS:", True, GREEN)
     screen.blit(controls_title, (WIDTH // 2 - controls_box_width // 2 + 10, controls_y))
     
     # Draw control instructions
@@ -236,9 +246,9 @@ def draw_victory_screen():
         draw_terminal_style_corner(screen, border_color, x, y, CORNER_SIZE, is_top, is_left)
     
     # Draw victory text with animation
-    title_font = pygame.font.SysFont("Courier New", 40)
-    subtitle_font = pygame.font.SysFont("Courier New", 24)
-    info_font = pygame.font.SysFont("Courier New", 18)
+    title_font = get_font(40)
+    subtitle_font = get_font(24)
+    info_font = get_font(18)
     
     # Animated text color
     text_color = (0, 200 + int(55 * glow_value), 0)
@@ -319,13 +329,13 @@ def draw_pause_menu():
         draw_terminal_style_corner(overlay, GREEN, x, y, CORNER_SIZE, is_top, is_left)
     
     # Draw title
-    title_font = pygame.font.SysFont("Courier New", 30)
+    title_font = get_font(30)
     title_text = "SYSTEM PAUSED"
     title_surf = title_font.render(title_text, True, GREEN)
     overlay.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, menu_y + 30))
     
     # Draw options
-    options_font = pygame.font.SysFont("Courier New", 20)
+    options_font = get_font(20)
     options = [
         ("[SPACE] RESUME NAVIGATION", GREEN),
         ("[ESC] RETURN TO MAIN MENU", DARK_GREEN)
@@ -473,12 +483,12 @@ def run_game():
                 
             # Draw the result message
             screen.fill(BLACK)
-            font = pygame.font.SysFont("Courier New", 30)
+            font = get_font(30)
             text = font.render(result_message, True, GREEN)
             screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2))
             
             # Draw return to menu message
-            small_font = pygame.font.SysFont("Courier New", 16)
+            small_font = get_font(16)
             return_text = small_font.render("Returning to menu...", True, DARK_GREEN)
             screen.blit(return_text, (WIDTH // 2 - return_text.get_width() // 2, HEIGHT // 2 + 50))
             
@@ -547,7 +557,7 @@ def run_game():
                 # Play a sound at low volume for first stage
                 calm_sound = sounds['startGame']
                 old_volume = calm_sound.get_volume()
-                calm_sound.set_volume(0.2)  # Lower volume for calm waters
+                calm_sound.set_volume(0.1)  # Lower volume for calm waters
                 calm_sound.play()
                 # Restore original volume after a short delay
                 pygame.time.set_timer(pygame.USEREVENT + 1, 500)  # Set a timer for 500ms
@@ -802,7 +812,7 @@ def run_game():
         if stage_announcement and stage_announcement_timer > 0:
             # Draw with fading effect
             alpha = min(255, stage_announcement_timer * 4)
-            font = pygame.font.SysFont("Courier New", 24)
+            font = get_font(24)
             announcement_surf = font.render(stage_announcement, True, 
                                             YELLOW if current_stage == "MEDIUM" else
                                             RED if current_stage == "HARD" else
@@ -827,7 +837,7 @@ def run_game():
         if hydra_warning_active:
             # Flashing effect
             if (hydra_warning_timer // 5) % 2 == 0:  # Flash more frequently (every 5 frames)
-                font = pygame.font.SysFont("Courier New", 26)  # Larger font
+                font = get_font(26)  # Larger font
                 warning_surf = font.render(hydra_warning_text, True, RED)
                 
                 # Draw warning text at top of screen with background

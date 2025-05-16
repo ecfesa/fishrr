@@ -9,7 +9,9 @@ def play_sound(sound_file):
     if not sound_file.endswith('.wav'):
         sound_file += '.wav'
     try:
-        pygame.mixer.Sound(f"sounds/{sound_file}").play()
+        sound = pygame.mixer.Sound(f"sounds/{sound_file}")
+        sound.set_volume(0.15)  # Set lower volume for all sound effects
+        sound.play()
     except FileNotFoundError:
         print(f"Warning: Sound file 'sounds/{sound_file}' not found")
     except Exception as e:
