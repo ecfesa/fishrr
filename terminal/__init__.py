@@ -1,9 +1,9 @@
 import sys
 import os
-import time
 
 from terminal import Terminal
-
+from shell import Shell
+from system import System
 # Detect platform
 IS_WINDOWS = os.name == 'nt'
 
@@ -31,19 +31,20 @@ else:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
 
-def print_terminal(terminal):
+def print_terminal(terminal, char):
     clear() 
     for row in terminal.buffer:
         print(''.join(row))
     print(f"\nCursor at: ({terminal.cursor_pos.x}, {terminal.cursor_pos.y})")
+    print(f"Last input: {char} ord: {ord(char)}")
 
 if __name__ == '__main__':
-    terminal = Terminal(size_x=10, size_y=5)
+    system = System()
     print("Type to write to the terminal. Press ESC to exit.")
 
     while True:
         char = read_char()
         if ord(char) == 27:  # ESC key
             break
-        terminal.process_input(char)
-        print_terminal(terminal)
+        system.process_input(char)
+        print_terminal(system.terminal, char)

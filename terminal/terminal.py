@@ -1,7 +1,5 @@
 from enum import Enum
 
-class TerminalMode(Enum):
-    DIRECT = 1
 
 type TerminalBuffer = list[list[str]]
 
@@ -16,7 +14,6 @@ class Terminal:
         self.size_y = size_y
         self.buffer: TerminalBuffer = [[' ' for _ in range(size_x)] for _ in range(size_y)]
         self.next_buffer: TerminalBuffer = [[' ' for _ in range(size_x)] for _ in range(size_y)]
-        self.mode: TerminalMode = TerminalMode.DIRECT
         self.cursor_pos = TerminalPosition()
 
         print(f"terminal buffer initialized with size [{size_x}, {size_y}]")
@@ -31,7 +28,7 @@ class Terminal:
             y = self.cursor_pos.y
 
         if 0 <= y < self.size_y and 0 <= x < self.size_x:
-            self.buffer[y][x] = char
+            self.next_buffer[y][x] = char
     
     def shift_cursor(self, offset = 1):
         new_x_total = self.cursor_pos.x + offset
@@ -41,18 +38,28 @@ class Terminal:
         # Scroll if cursor goes out of vertical bounds
         while new_y >= self.size_y:
             # Remove first row
-            self.buffer.pop(0)
+            self.next_buffer.pop(0)
             # Append new empty row at bottom
-            self.buffer.append([' ' for _ in range(self.size_x)])
+            self.next_buffer.append([' ' for _ in range(self.size_x)])
             new_y -= 1  # Keep cursor inside bounds
 
         self.cursor_pos.x = new_x
         self.cursor_pos.y = new_y
 
-    def process_input(self, char: str):
-        if self.mode == TerminalMode.DIRECT:
-            self.set_char(char)
-            self.shift_cursor(1)
-            
+    def clear(self):
+        self.next_buffer = [[' ' for _ in range(self.size_x)] for _ in range(self.size_y)]
+        self.cursor_pos = TerminalPosition()
 
+    def print(self, text: str):
+        for char in text:
+            if char == "\n":
+                self.shift_cursor(self.size_x - self.cursor_pos.x)
+            elif char == "\b":
+                self.shift_cursor(-1)
+                self.set_char(' ')
+            else:
+                self.set_char(char)
+                self.shift_cursor(1)
+        
+        self.flush()
 
