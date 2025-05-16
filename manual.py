@@ -156,7 +156,47 @@ class CommandList:
         self.discovered = discovered
         self.expanded_command = None
         self.scroll_offset = 0
-        self.max_visible_commands = 10
+
+        # Layout constants
+        self.screen_margin = 20  # Increased outer margin
+        self.title_extra_padding_top = 10
+        self.content_padding = 15 # Padding between elements (title-line, line-buttons, etc.)
+        
+        self.scroll_button_width = 80 # Slightly wider scroll buttons
+        self.scroll_button_height = 30
+        self.line_height = BODY_FONT.get_height() + 10  # Height of one unexpanded command entry slot
+
+        # Title positioning
+        title_text_height = TITLE_FONT.get_height()
+        self.title_rect_center_y = self.screen_margin + self.title_extra_padding_top + title_text_height // 2
+        title_bottom = self.title_rect_center_y + title_text_height // 2
+        
+        # Horizontal line below title
+        self.title_line_y = title_bottom + self.content_padding 
+
+        # UP scroll button positioning
+        up_button_top_y = self.title_line_y + self.content_padding
+        self.up_button_rect = pygame.Rect(0, 0, self.scroll_button_width, self.scroll_button_height)
+        self.up_button_rect.centerx = WIDTH // 2
+        self.up_button_rect.top = up_button_top_y
+        
+        # Start Y for command list (top of command drawing area)
+        self.commands_start_y = self.up_button_rect.bottom + self.content_padding
+
+        # DOWN scroll button positioning
+        self.down_button_rect = pygame.Rect(0, 0, self.scroll_button_width, self.scroll_button_height)
+        self.down_button_rect.centerx = WIDTH // 2
+        self.down_button_rect.bottom = HEIGHT - self.screen_margin
+        
+        # Calculate command area height (space available for command entries)
+        # This is the bottom limit for where command content can be drawn.
+        self.command_area_bottom_limit = self.down_button_rect.top - self.content_padding
+        self.command_area_height = self.command_area_bottom_limit - self.commands_start_y
+        
+        if self.command_area_height < self.line_height:
+            self.max_visible_commands_unexpanded = 0 # How many non-expanded items fit
+        else:
+            self.max_visible_commands_unexpanded = self.command_area_height // self.line_height
     
     def toggle_command(self, command: str):
         """Toggle expansion of a command."""
@@ -167,177 +207,244 @@ class CommandList:
     
     def scroll(self, amount: int):
         """Scroll the command list by the specified amount."""
-        max_scroll = max(0, len(self.commands) - self.max_visible_commands)
-        self.scroll_offset = max(0, min(self.scroll_offset + amount, max_scroll))
+        num_commands = len(self.commands)
+        if num_commands == 0:
+            self.scroll_offset = 0
+            return
+
+        # Allow scrolling so that the last command can be at the top of the list.
+        # The draw method handles clipping if content is too tall.
+        new_offset = self.scroll_offset + amount
+        self.scroll_offset = max(0, min(new_offset, num_commands - 1))
     
     def get_command_rect(self, index: int, y_pos: int) -> pygame.Rect:
         """Get the rectangle for a command at the specified index and y position."""
-        return pygame.Rect(PADDING, y_pos, WIDTH - 2 * PADDING, BODY_FONT.get_height())
+        return pygame.Rect(self.screen_margin, y_pos, WIDTH - 2 * self.screen_margin, BODY_FONT.get_height())
     
-    def draw(self, surface: pygame.Surface) -> List[Tuple[pygame.Rect, str]]:
+    def draw(self, surface: pygame.Surface, mouse_pos: Tuple[int, int] | None) -> List[Tuple[pygame.Rect, str]]:
         """Draw the command list and return a list of (rect, command) pairs for clickable areas."""
-        # Clear the surface
         surface.fill(BACKGROUND_COLOR)
-        
-        # Draw rounded rectangle border
-        rounded_rect(
-            surface, 
-            (BORDER_WIDTH//2, BORDER_WIDTH//2, WIDTH-BORDER_WIDTH, HEIGHT-BORDER_WIDTH),
-            BACKGROUND_COLOR,
-            BORDER_RADIUS,
-            BORDER_WIDTH
-        )
         
         # Draw title
         title_text = TITLE_FONT.render("COMMAND LIST", True, TITLE_COLOR)
-        title_rect = title_text.get_rect(center=(WIDTH//2, PADDING + title_text.get_height()//2))
+        title_rect = title_text.get_rect(center=(WIDTH // 2, self.title_rect_center_y))
         surface.blit(title_text, title_rect)
         
         # Draw horizontal line below title
         pygame.draw.line(
-            surface, 
-            BORDER_COLOR, 
-            (PADDING, title_rect.bottom + PADDING//2),
-            (WIDTH - PADDING, title_rect.bottom + PADDING//2),
-            1
+            surface, BORDER_COLOR, 
+            (self.screen_margin, self.title_line_y),
+            (WIDTH - self.screen_margin, self.title_line_y), 1
         )
         
-        # Draw scroll buttons
-        scroll_up = "▲"
-        scroll_down = "▼"
-        up_text = BODY_FONT.render(scroll_up, True, TEXT_COLOR)
-        down_text = BODY_FONT.render(scroll_down, True, TEXT_COLOR)
+        # Draw Scroll Buttons
+        up_text_render = BODY_FONT.render("▲", True, TEXT_COLOR)
+        down_text_render = BODY_FONT.render("▼", True, TEXT_COLOR)
+        up_button_bg_color = HIGHLIGHT_COLOR if mouse_pos and self.up_button_rect.collidepoint(mouse_pos) else BORDER_COLOR
+        down_button_bg_color = HIGHLIGHT_COLOR if mouse_pos and self.down_button_rect.collidepoint(mouse_pos) else BORDER_COLOR
+        pygame.draw.rect(surface, up_button_bg_color, self.up_button_rect, border_radius=4)
+        pygame.draw.rect(surface, down_button_bg_color, self.down_button_rect, border_radius=4)
+        up_text_rect = up_text_render.get_rect(center=self.up_button_rect.center)
+        down_text_rect = down_text_render.get_rect(center=self.down_button_rect.center)
+        surface.blit(up_text_render, up_text_rect)
+        surface.blit(down_text_render, down_text_rect)
+
+        clickable_areas = [(self.up_button_rect, "scroll_up"), (self.down_button_rect, "scroll_down")]
         
-        up_rect = up_text.get_rect(topright=(WIDTH - PADDING, title_rect.bottom + PADDING//2 + 5))
-        down_rect = down_text.get_rect(bottomright=(WIDTH - PADDING, HEIGHT - PADDING))
-        
-        surface.blit(up_text, up_rect)
-        surface.blit(down_text, down_rect)
-        
-        # Calculate available area
-        header_bottom = title_rect.bottom + PADDING + 5
-        
-        # Draw commands
-        y_pos = header_bottom + 10
-        line_height = BODY_FONT.get_height() + 10
-        
-        clickable_areas = []
-        
-        # Get list of command keys and slice based on scroll position
         cmd_keys = list(self.commands.keys())
-        visible_commands = cmd_keys[self.scroll_offset:self.scroll_offset + self.max_visible_commands]
-        
-        for i, cmd in enumerate(visible_commands):
-            cmd_info = self.commands[cmd]
+
+        # First Pass: Determine what fits and calculate their drawing properties
+        visible_command_details = []
+        current_y_cumulative = self.commands_start_y # Tracks the top Y for the *next* command to be placed
+
+        for i in range(self.scroll_offset, len(cmd_keys)):
+            cmd_key = cmd_keys[i]
+            cmd_info_dict = self.commands[cmd_key]
+
+            is_expanded_flag = (self.expanded_command == cmd_key) and \
+                               (cmd_key in self.discovered or cmd_key not in self.hidden)
+
+            # Height of the command's main line (name, desc, indicator) + its bottom padding
+            main_line_total_height = self.line_height 
             
-            # Check if command is discovered
+            current_item_total_draw_height = main_line_total_height
+            
+            example_render_details = {"is_present": False, "height": 0}
+
+            if is_expanded_flag:
+                examples_text_list = cmd_info_dict["example"].split("\\n")
+                ex_title_h = EXAMPLE_FONT.get_height()
+                ex_lines_h = len(examples_text_list) * EXAMPLE_FONT.get_height()
+                
+                # Padding for example box: 5px top/bottom inside box, 10px left/right inside.
+                # Additional gap between main command line and example box.
+                ex_box_vertical_padding_content = 10 # 5 top + 5 bottom for text within box lines
+                ex_box_top_margin = 5 # Gap between command line and example box border
+                                
+                example_section_visual_height = ex_title_h + ex_lines_h + ex_box_vertical_padding_content
+                
+                # Total height added by the example section including its top margin
+                total_example_section_added_height = example_section_visual_height + ex_box_top_margin
+                current_item_total_draw_height += total_example_section_added_height
+                
+                example_render_details = {
+                    "is_present": True, "height": example_section_visual_height, 
+                    "top_margin": ex_box_top_margin,
+                    "texts": examples_text_list, "title_h": ex_title_h, 
+                    "box_padding_content": ex_box_vertical_padding_content
+                }
+            
+            # Stop adding if the very top of the non-expanded part of this command is already beyond the drawing area limit.
+            # Allow the first item to be partially drawn even if it's very tall.
+            if len(visible_command_details) > 0 and \
+               current_y_cumulative + BODY_FONT.get_height() > self.command_area_bottom_limit:
+                break
+            
+            # If cumulative Y has already gone way past the bottom (e.g. scrolled too far down for any content)
+            if current_y_cumulative >= self.command_area_bottom_limit + self.line_height: # allow some overshoot for last item
+                 if not (len(visible_command_details) == 0 and cmd_key == cmd_keys[self.scroll_offset]): # if it's the first desired item
+                    break
+
+
+            visible_command_details.append({
+                "key": cmd_key, "info": cmd_info_dict,
+                "y_start_coord": current_y_cumulative, 
+                "main_line_h": main_line_total_height, # Includes padding for the command line itself
+                "total_item_h": current_item_total_draw_height,
+                "is_expanded": is_expanded_flag, 
+                "example_details": example_render_details
+            })
+            
+            current_y_cumulative += current_item_total_draw_height
+
+        # Second Pass: Draw the determined visible commands
+        for index, item_data in enumerate(visible_command_details):
+            cmd = item_data["key"]
+            cmd_info = item_data["info"]
+            y_pos_item_start = item_data["y_start_coord"]
+            is_expanded = item_data["is_expanded"]
+            
+            # Clip drawing to the command area
+            # Note: Pygame's blit and draw operations are clipped by surface boundaries,
+            # but explicit clipping rect can be set on surface if needed for sub-areas.
+            # For now, we rely on not starting to draw items that are fully below.
+
+            # Draw separator line above this item (if not the first in the visible list)
+            if index > 0:
+                # line_height has 10px padding, use half for separator offset
+                line_y = y_pos_item_start - (self.line_height - BODY_FONT.get_height()) // 2 
+                if line_y > self.commands_start_y : # Don't draw above command area
+                    pygame.draw.line(
+                        surface, (BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2], 100),
+                        (self.screen_margin, line_y),
+                        (WIDTH - self.screen_margin, line_y), 1
+                    )
+
+            # --- Draw Command Main Line ---
+            # Stop drawing this item if its starting Y is already beyond the command area bottom limit
+            if y_pos_item_start >= self.command_area_bottom_limit + self.line_height: # Too far down
+                continue
+
             is_discovered = cmd in self.discovered
             is_hidden = cmd in self.hidden
-            is_expanded = self.expanded_command == cmd
-            
-            # Create clickable area for this command
-            cmd_rect = self.get_command_rect(i, y_pos)
-            
-            # Only make discovered or non-hidden commands clickable
+
+            # Clickable area for the main command line
+            # Use BODY_FONT.get_height() for the clickable height of the primary line.
+            cmd_click_rect_height = BODY_FONT.get_height()
+            cmd_click_rect = pygame.Rect(
+                self.screen_margin, y_pos_item_start, 
+                WIDTH - 2 * self.screen_margin, cmd_click_rect_height
+            )
+
             if is_discovered or not is_hidden:
-                clickable_areas.append((cmd_rect, cmd))
+                if cmd_click_rect.bottom < self.command_area_bottom_limit + cmd_click_rect_height : # only add if visible
+                    clickable_areas.append((cmd_click_rect, cmd))
                 
-                # Highlight the row if this command is expanded
-                if is_expanded:
-                    highlight_rect = pygame.Rect(PADDING + 5, y_pos - 5, 
-                                               WIDTH - 2 * PADDING - 10, 
-                                               BODY_FONT.get_height() + 5)
-                    pygame.draw.rect(surface, HIGHLIGHT_COLOR, highlight_rect, border_radius=4)
+                if is_expanded: # Highlight the main line of the expanded command
+                    highlight_rect = pygame.Rect(
+                        self.screen_margin + 5, y_pos_item_start - 2, # Small offset for visual
+                        WIDTH - 2 * self.screen_margin - 10, cmd_click_rect_height + 4
+                    )
+                    if highlight_rect.bottom < self.command_area_bottom_limit + cmd_click_rect_height:
+                         pygame.draw.rect(surface, HIGHLIGHT_COLOR, highlight_rect, border_radius=4)
                 
-                # Render normal text for discovered commands or non-hidden commands
-                cmd_text = BODY_FONT.render(cmd, True, TEXT_COLOR)
-                desc_text = BODY_FONT.render(cmd_info["desc"], True, TEXT_COLOR)
+                # Command Name
+                cmd_text_surface = BODY_FONT.render(cmd, True, TEXT_COLOR)
+                surface.blit(cmd_text_surface, (self.screen_margin + 10, y_pos_item_start))
+
+                # Command Description
+                desc_x_start = self.screen_margin + 150 
+                max_desc_width_pixels = (WIDTH - self.screen_margin - 20 - desc_x_start) # Space for desc before indicator
                 
-                # Draw command name
-                surface.blit(cmd_text, (PADDING + 10, y_pos))
-                
-                # Calculate maximum width for description
-                max_desc_width = WIDTH - 2 * PADDING - BODY_FONT.size(cmd)[0] - 30
-                
-                # Truncate description if necessary and not expanded
                 desc_str = cmd_info["desc"]
                 if not is_expanded:
-                    # Estimate character width
                     avg_char_width = BODY_FONT.size("A")[0]
-                    max_chars = max_desc_width // avg_char_width
-                    
-                    if len(desc_str) > max_chars:
-                        desc_str = desc_str[:max_chars-3] + "..."
+                    if avg_char_width > 0:
+                        max_chars = max_desc_width_pixels // avg_char_width
+                        if len(desc_str) > max_chars:
+                            desc_str = desc_str[:max_chars-3] + "..."
+                    else: # Fallback if font size is weird
+                        desc_str = desc_str[:15] + "..." if len(desc_str) > 18 else desc_str
                 
-                # Draw description text
-                desc_text = BODY_FONT.render(desc_str, True, TEXT_COLOR)
-                surface.blit(desc_text, (PADDING + 150, y_pos))
-                
-                # Draw expansion indicator
-                expand_indicator = "▼" if is_expanded else "▶"
-                exp_text = BODY_FONT.render(expand_indicator, True, TEXT_COLOR)
-                surface.blit(exp_text, (WIDTH - PADDING - 20, y_pos))
-                
-                # If expanded, show example(s)
+                desc_text_surface = BODY_FONT.render(desc_str, True, TEXT_COLOR)
+                surface.blit(desc_text_surface, (desc_x_start, y_pos_item_start))
+
+                # Expansion Indicator
+                expand_indicator_char = "▼" if is_expanded else "▶"
+                exp_ind_surface = BODY_FONT.render(expand_indicator_char, True, TEXT_COLOR)
+                surface.blit(exp_ind_surface, (WIDTH - self.screen_margin - 25, y_pos_item_start)) # Adjusted for slightly more padding
+
+                # --- Draw Expanded Example Section (if applicable) ---
                 if is_expanded:
-                    examples = cmd_info["example"].split("\n")
-                    example_y = y_pos + line_height
+                    ex_details = item_data["example_details"]
+                    # Y where the example box border starts
+                    example_box_start_y = y_pos_item_start + BODY_FONT.get_height() + 5 # Small gap after main text line
                     
-                    # Draw example box
-                    example_height = len(examples) * EXAMPLE_FONT.get_height() + 20
-                    example_rect = pygame.Rect(
-                        PADDING + 20, 
-                        example_y - 5, 
-                        WIDTH - 2 * PADDING - 40, 
-                        example_height
-                    )
-                    
-                    # Draw semi-transparent background
-                    s = pygame.Surface((example_rect.width, example_rect.height), pygame.SRCALPHA)
-                    s.fill((30, 70, 100, 128))  # Semi-transparent blue
-                    surface.blit(s, example_rect)
-                    
-                    # Draw border
-                    pygame.draw.rect(surface, BORDER_COLOR, example_rect, width=1, border_radius=4)
-                    
-                    # Draw "Example:" text
-                    ex_title = EXAMPLE_FONT.render("Example:", True, EXAMPLE_COLOR)
-                    surface.blit(ex_title, (PADDING + 30, example_y + 5))
-                    
-                    # Draw each example line
-                    for j, example in enumerate(examples):
-                        ex_text = EXAMPLE_FONT.render(example, True, EXAMPLE_COLOR)
-                        surface.blit(ex_text, (PADDING + 50, example_y + 5 + (j+1) * EXAMPLE_FONT.get_height()))
-                    
-                    # Increase y_pos to account for expanded section
-                    y_pos += example_height
-            else:
-                # Render completely unreadable text for undiscovered hidden commands
-                blur_text(surface, cmd, (PADDING + 10, y_pos), BODY_FONT, HIDDEN_COLOR)
-                blur_text(surface, "??????????????????", (PADDING + 150, y_pos), BODY_FONT, HIDDEN_COLOR)
+                    # Check if example box itself is visible before drawing
+                    if example_box_start_y < self.command_area_bottom_limit:
+                        example_rect_visual = pygame.Rect(
+                            self.screen_margin + 20, 
+                            example_box_start_y,
+                            WIDTH - 2 * self.screen_margin - 40, 
+                            ex_details["height"] # This is the height of the content *inside* the box + its internal padding
+                        )
+                        
+                        # Semi-transparent background for example box
+                        s = pygame.Surface((example_rect_visual.width, example_rect_visual.height), pygame.SRCALPHA)
+                        s.fill((30, 70, 100, 128)) 
+                        surface.blit(s, example_rect_visual.topleft)
+                        pygame.draw.rect(surface, BORDER_COLOR, example_rect_visual, width=1, border_radius=4)
+
+                        # "Example:" title text
+                        ex_title_draw_y = example_rect_visual.top + (ex_details["box_padding_content"] // 2) - (EXAMPLE_FONT.get_height()//2) + (ex_details["title_h"]//2)
+
+                        surface.blit(
+                            EXAMPLE_FONT.render("Example:", True, EXAMPLE_COLOR),
+                            (example_rect_visual.left + 10, ex_title_draw_y)
+                        )
+
+                        # Example lines
+                        current_example_line_draw_y = ex_title_draw_y + ex_details["title_h"]
+                        for ex_line_str in ex_details["texts"]:
+                            if current_example_line_draw_y + EXAMPLE_FONT.get_height() <= self.command_area_bottom_limit + EXAMPLE_FONT.get_height() : # also check this for clipping
+                                surface.blit(
+                                    EXAMPLE_FONT.render(ex_line_str, True, EXAMPLE_COLOR),
+                                    (example_rect_visual.left + 10 + 20, current_example_line_draw_y) # Indent examples
+                                )
+                            current_example_line_draw_y += EXAMPLE_FONT.get_height()
             
-            y_pos += line_height
-            
-            # Draw horizontal line after each entry except the last one
-            if i < len(visible_commands) - 1:
-                pygame.draw.line(
-                    surface, 
-                    (BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2], 100),  # Semi-transparent
-                    (PADDING, y_pos - 5),
-                    (WIDTH - PADDING, y_pos - 5),
-                    1
-                )
-        
-        # Add scroll button areas to clickable areas
-        clickable_areas.append((up_rect, "scroll_up"))
-        clickable_areas.append((down_rect, "scroll_down"))
+            else: # Undiscovered hidden command
+                # Ensure blurred text also respects command_area_bottom_limit
+                if y_pos_item_start < self.command_area_bottom_limit:
+                    blur_text(surface, cmd, (self.screen_margin + 10, y_pos_item_start), BODY_FONT, HIDDEN_COLOR)
+                    blur_text(surface, "??????????????????", (self.screen_margin + 150, y_pos_item_start), BODY_FONT, HIDDEN_COLOR)
         
         return clickable_areas
 
-def draw_manual(surface: pygame.Surface, discovered: Set[str]) -> List[Tuple[pygame.Rect, str]]:
+def draw_manual(surface: pygame.Surface, discovered: Set[str], mouse_pos: Tuple[int, int] | None) -> List[Tuple[pygame.Rect, str]]:
     """Draw the manual with the expandable command list."""
     command_list = CommandList(discovered)
-    return command_list.draw(surface)
+    return command_list.draw(surface, mouse_pos)
 
 def main():
     """Test function to display the manual."""
@@ -352,6 +459,8 @@ def main():
     
     running = True
     while running:
+        mouse_pos = pygame.mouse.get_pos()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -365,7 +474,7 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left mouse button
                     # Get clickable areas
-                    clickable_areas = command_list.draw(screen)
+                    clickable_areas = command_list.draw(screen, mouse_pos)
                     
                     # Check if click is on a command
                     for rect, cmd in clickable_areas:
@@ -378,7 +487,7 @@ def main():
                                 command_list.toggle_command(cmd)
         
         # Draw the manual
-        command_list.draw(screen)
+        command_list.draw(screen, mouse_pos)
         pygame.display.flip()
         
     pygame.quit()
