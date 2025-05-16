@@ -1,8 +1,10 @@
 import pygame
+
 from game.ui.draw_window import draw_window
 import game.globals as g
 import string
 
+pygame.init()
 pygame.display.set_caption("fishrr")
 
 # Whitelist for allowed input characters
@@ -12,12 +14,20 @@ ALLOWED_CHARS = frozenset(
     string.digits +
     " !@#$%^&*()_+-=[]{};':\",./<>?|~`" + # Common special characters
     "\r"  # Enter key
+    "\b"  # Backspace key
 )
 
-def process_input(char: str):
-    if char == "" or char not in ALLOWED_CHARS:
-        return
-    g.SYSTEM.process_input(char)
+def process_input(event: pygame.event.Event):
+    if event.key == pygame.K_l and (
+        event.mod & pygame.KMOD_CTRL or
+        event.mod & pygame.KMOD_LCTRL or
+        event.mod & pygame.KMOD_RCTRL
+    ):
+        g.SYSTEM.clear()
+    else:
+        if event.unicode == "" or event.unicode not in ALLOWED_CHARS:
+            return
+        g.SYSTEM.process_input(event.unicode)
 
 def run():
     clock = pygame.time.Clock()
@@ -28,10 +38,7 @@ def run():
             if event.type == pygame.QUIT:
                 run = False
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_l and (event.mod & pygame.KMOD_CTRL or event.mod & pygame.KMOD_LCTRL or event.mod & pygame.KMOD_RCTRL):
-                    g.SYSTEM.clear()
-                else:
-                    process_input(event.unicode)
+                process_input(event)
 
         keys_pressed = pygame.key.get_pressed()
         if keys_pressed[pygame.K_ESCAPE]:

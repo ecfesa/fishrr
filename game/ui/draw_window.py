@@ -20,4 +20,5 @@ def draw_window():
     g.WIN.fill(g.BLACK)
     draw_logo()
     draw_terminal() # Call the function to draw the terminal
+
     pygame.display.update()
