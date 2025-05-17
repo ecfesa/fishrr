@@ -35,25 +35,30 @@ Now check the backpack:
     fs_instance.mkdir("/home")
 
     # Island1 specific content
-    fs_instance.mkdir("/islands/island1")
-    fs_instance.write_file("/islands/island1/island1.txt", """This is a temporary file.         
-You can ignore it. Seriously!""")
-    fs_instance.mkdir("/islands/island1/ground")
-    fs_instance.mkdir("/islands/island1/forest")
-    fs_instance.mkdir("/islands/island1/fish_pond")
+    fs_instance.mkdir("/islands/fish_island")
+    fs_instance.write_file("/islands/fish_island/COPYRIGHT.txt", "Developed in 1992. Copyright: AMDORI Inc.")
+    fs_instance.write_file("/islands/fish_island/manual.txt", """Ahoy! Have you heard about the manual?
+                           
+Have you ever figured to yourself what a command does? No? Only me? Oh     well, the 'man' command might help you out!
+                           
+Try it out today for only $3.99 a month!""")
+
+    fs_instance.mkdir("/islands/fish_island/ground")
+    fs_instance.mkdir("/islands/fish_island/forest")
+    fs_instance.mkdir("/islands/fish_island/fish_pond")
 
     # Add ground items for island1
-    fs_instance.write_file("/islands/island1/ground/fishing_rod.item", """A sturdy fishing rod.""")
-    fs_instance.write_file("/islands/island1/ground/fishing_line.item", """Strong fishing line.""")
-    fs_instance.write_file("/islands/island1/ground/bucket.item", """A metal bucket for carrying things.""")
+    fs_instance.write_file("/islands/fish_island/ground/fishing_rod.item", """A sturdy fishing rod.""")
+    fs_instance.write_file("/islands/fish_island/ground/fishing_line.item", """Strong fishing line.""")
+    fs_instance.write_file("/islands/fish_island/ground/bucket.item", """A metal bucket for carrying things.""")
 
     # Add forest items for island1
-    fs_instance.write_file("/islands/island1/forest/wood.item", """Pieces of wood collected from the forest.""")
-    fs_instance.write_file("/islands/island1/forest/can_of_worms.item", """A tin can full of wriggling worms. Perfect for fishing.""")
-    fs_instance.write_file("/islands/island1/forest/sail.item", """A large piece of cloth that could be used as a sail.""")
+    fs_instance.write_file("/islands/fish_island/forest/wood.item", """Pieces of wood collected from the forest.""")
+    fs_instance.write_file("/islands/fish_island/forest/can_of_worms.item", """A tin can full of wriggling worms. Perfect for fishing.""")
+    fs_instance.write_file("/islands/fish_island/forest/sail.item", """A large piece of cloth that could be used as a sail.""")
 
     # Add fish_pond directory for island1 (empty folder for fishes)
-    fs_instance.mkdir("/islands/island1/fish_pond/fishes")
+    fs_instance.mkdir("/islands/fish_island/fish_pond/fishes")
 
 # Create the filesystem structure when this module is loaded.
 create_initial_filesystem(fs)

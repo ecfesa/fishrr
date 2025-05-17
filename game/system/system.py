@@ -4,6 +4,7 @@ from game.system.terminal import Terminal
 from game.system.game_files import fs as game_fs_instance
 import game.manual as manual
 import game.globals as g # Import globals
+from game.state import GAME_STATE_INSTANCE
 
 class System:
     def __init__(self, size_x: int, size_y: int):
@@ -21,6 +22,21 @@ class System:
         self.shell.register_cmd("cat", self.cat)
         self.shell.register_cmd("tree", self.tree)
         self.shell.register_cmd("man", self.man)
+        self.shell.register_cmd("think", self.think)
+
+        # Initialize first automatic commands
+        self.shell.add_auto_text("ls / # Press enter to confirm command\r")
+        self.shell.add_auto_text("cd /islands\r")
+        self.shell.add_auto_text("ls\r")
+        self.shell.add_auto_text("cd fish_island\r")
+        self.shell.add_auto_text("ls\r")
+        self.shell.add_auto_text("cat COPYRIGHT.txt\r")
+        self.shell.add_auto_text("think\r")
+
+        self.think_text = ""
+
+    def set_think_text(self, text: str):
+        self.think_text = text
 
     def get_buffer(self):
         return self.terminal.buffer
@@ -308,10 +324,12 @@ class System:
             # We need the dimensions of the main display surface (g.WIN)
             # These are g.WIDTH and g.HEIGHT from globals.py
             g.MANUAL_VIEW_INSTANCE = manual.create_command_list_instance(
-                g.DISCOVERED_COMMANDS, 
+                GAME_STATE_INSTANCE.get_discovered_commands(), 
                 g.WIDTH, 
                 g.HEIGHT
             )
         # Potentially, we might want to re-initialize if discovered commands change
         # or pass the surface dimensions if they can change dynamically (not the case here).
         
+    def think(self, *args, **kwargs):
+        self.terminal.print(GAME_STATE_INSTANCE.get_thinking_text()+'\n')

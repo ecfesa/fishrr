@@ -1,9 +1,8 @@
 import game.system as system
 import pygame
+from game.state import GameState
 
-SYSTEM = system.System(65, 25)
-SYSTEM.shell.add_auto_text("# You can copy files from the root directory to the backpack.")
-
+SYSTEM = system.System(75, 25)
 PADDING = 20
 
 WIDTH, HEIGHT = 800, 600
