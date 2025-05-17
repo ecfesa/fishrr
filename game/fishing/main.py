@@ -352,7 +352,7 @@ def run_fishing_game():
 
         pygame.display.flip()
 
-    pygame.quit()
+    # pygame.quit() # Removed this line
     # sys.exit() # Do not exit the whole application
 
 # If you want to run this file directly for testing:
