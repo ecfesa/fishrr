@@ -25,6 +25,15 @@ class GameState:
         # Bar position: 0 = top, 1 = right, 2 = bottom, 3 = left
         self.bar_position = 0
 
+        # Tutorial variables - NEW SECTION
+        self.tutorial_active = True
+        self.tutorial_timer = 300  # 5 seconds at 60fps
+        self.tutorial_messages = [
+            {"text": "Use ARROW KEYS to position the bar in the CONTROL ZONE", "position": (WIDTH // 2, SQUARE_POS[1] - 40)},
+            {"text": "Position the bar on the OPPOSITE SIDE of incoming wind", "position": (WIDTH // 2, SQUARE_POS[1] - 70)},
+            {"text": "Watch for RED WARNING INDICATORS on the outer zone", "position": (WIDTH // 2, SQUARE_POS[1] + SQUARE_SIZE + 30)},
+        ]
+
         # Animation variables
         self.glow_value = 0
         self.glow_direction = 1
@@ -188,6 +197,12 @@ class GameState:
             if self.result_timer <= 0:
                 self.current_state = "menu"
             return
+            
+        # Update tutorial timer
+        if self.tutorial_active:
+            self.tutorial_timer -= 1
+            if self.tutorial_timer <= 0:
+                self.tutorial_active = False
             
         # Update animation values
         self.glow_value += 0.1 * self.glow_direction
@@ -546,6 +561,10 @@ class GameState:
         # Display bar position
         draw_status_line(self.screen, self.bar_position)
         
+        # Draw tutorial if active
+        if self.tutorial_active:
+            self.draw_tutorial()
+        
         # Draw stage announcement if active
         if self.stage_announcement and self.stage_announcement_timer > 0:
             # Draw with fading effect
@@ -592,4 +611,91 @@ class GameState:
                 self.screen.blit(warning_surf, (
                     WIDTH // 2 - warning_surf.get_width() // 2,
                     BORDER_MARGIN + 40
-                )) 
+                ))
+    
+    def draw_tutorial(self):
+        """Draw the tutorial instructions with fading effect"""
+        # Calculate fade effect based on timer
+        # Start fading out at halfway point
+        fade_start = self.tutorial_timer / 2
+        if self.tutorial_timer <= fade_start:
+            alpha = int(255 * (self.tutorial_timer / fade_start))
+        else:
+            alpha = 255
+            
+        font = get_font(18)
+        
+        # Draw arrow key symbol if needed
+        def draw_arrow(direction, pos, color):
+            """Draw an arrow in the specified direction"""
+            x, y = pos
+            size = 12
+            
+            # Arrow coordinates based on direction
+            if direction == 0:  # Up
+                points = [(x, y-size), (x-size, y), (x+size, y)]
+            elif direction == 1:  # Right
+                points = [(x+size, y), (x, y-size), (x, y+size)]
+            elif direction == 2:  # Down
+                points = [(x, y+size), (x-size, y), (x+size, y)]
+            elif direction == 3:  # Left
+                points = [(x-size, y), (x, y-size), (x, y+size)]
+                
+            # Create a surface for transparency
+            arrow_surf = pygame.Surface((size*3, size*3), pygame.SRCALPHA)
+            # Draw the triangle
+            pygame.draw.polygon(arrow_surf, (*color, alpha), [(p[0]-x+size*1.5, p[1]-y+size*1.5) for p in points])
+            
+            # Draw the arrow to the screen
+            self.screen.blit(arrow_surf, (x-size*1.5, y-size*1.5))
+            
+        # Draw a semi-transparent box around the inner play area to highlight it
+        highlight_surf = pygame.Surface((SQUARE_SIZE+20, SQUARE_SIZE+20), pygame.SRCALPHA)
+        pygame.draw.rect(highlight_surf, (0, 255, 0, min(40, alpha//6)), (0, 0, SQUARE_SIZE+20, SQUARE_SIZE+20), 2)
+        self.screen.blit(highlight_surf, (SQUARE_POS[0]-10, SQUARE_POS[1]-10))
+        
+        # Draw the tutorial messages
+        for message in self.tutorial_messages:
+            text = message["text"]
+            position = message["position"]
+            
+            # Create a surface with text
+            text_surf = font.render(text, True, GREEN)
+            
+            # Create a surface for the background with transparency
+            bg_width = text_surf.get_width() + 20
+            bg_height = text_surf.get_height() + 10
+            bg_surf = pygame.Surface((bg_width, bg_height), pygame.SRCALPHA)
+            bg_surf.fill((0, 0, 0, min(180, alpha - 75)))
+            
+            # Draw background and text
+            self.screen.blit(bg_surf, (position[0] - bg_width//2, position[1] - bg_height//2))
+            
+            # Apply alpha to text by using a temporary surface
+            text_alpha_surf = pygame.Surface(text_surf.get_size(), pygame.SRCALPHA)
+            text_alpha_surf.fill((255, 255, 255, alpha))
+            text_surf.blit(text_alpha_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            
+            self.screen.blit(text_surf, (position[0] - text_surf.get_width()//2, position[1] - text_surf.get_height()//2))
+            
+        # Draw arrow key illustrations
+        # Position arrows relative to the bar positions (now on the inner square)
+        arrow_positions = [
+            (SQUARE_POS[0] + SQUARE_SIZE//2, SQUARE_POS[1] - 20),  # Top
+            (SQUARE_POS[0] + SQUARE_SIZE + 20, SQUARE_POS[1] + SQUARE_SIZE//2),  # Right
+            (SQUARE_POS[0] + SQUARE_SIZE//2, SQUARE_POS[1] + SQUARE_SIZE + 20),  # Bottom
+            (SQUARE_POS[0] - 20, SQUARE_POS[1] + SQUARE_SIZE//2)   # Left
+        ]
+        
+        # Draw each arrow
+        for i, pos in enumerate(arrow_positions):
+            # Highlight the current bar position
+            color = (0, 255, 0) if i == self.bar_position else (0, 180, 0)
+            draw_arrow(i, pos, color)
+        
+        # Draw a help reminder at the bottom
+        if alpha > 150:  # Only show when visible enough
+            help_font = get_font(14)
+            help_text = "Press ESC to pause"
+            help_surf = help_font.render(help_text, True, (0, 180, 0))
+            self.screen.blit(help_surf, (WIDTH - help_surf.get_width() - 20, HEIGHT - help_surf.get_height() - 15)) 

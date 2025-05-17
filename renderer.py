@@ -9,12 +9,12 @@ def draw_bar(screen, bar_position, glow_value):
     glow_intensity = 155 + int(100 * math.sin(glow_value))
     glow_color = (0, glow_intensity, 0)
     
-    # Draw the bar on the outer square
+    # Draw the bar on the inner square (changed from outer)
     bar_positions = [
-        (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], OUTER_SQUARE_SIZE, BAR_THICKNESS),  # Top
-        (OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE - BAR_THICKNESS, OUTER_SQUARE_POS[1], BAR_THICKNESS, OUTER_SQUARE_SIZE),  # Right
-        (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1] + OUTER_SQUARE_SIZE - BAR_THICKNESS, OUTER_SQUARE_SIZE, BAR_THICKNESS),  # Bottom
-        (OUTER_SQUARE_POS[0], OUTER_SQUARE_POS[1], BAR_THICKNESS, OUTER_SQUARE_SIZE)  # Left
+        (SQUARE_POS[0], SQUARE_POS[1], SQUARE_SIZE, BAR_THICKNESS),  # Top
+        (SQUARE_POS[0] + SQUARE_SIZE - BAR_THICKNESS, SQUARE_POS[1], BAR_THICKNESS, SQUARE_SIZE),  # Right
+        (SQUARE_POS[0], SQUARE_POS[1] + SQUARE_SIZE - BAR_THICKNESS, SQUARE_SIZE, BAR_THICKNESS),  # Bottom
+        (SQUARE_POS[0], SQUARE_POS[1], BAR_THICKNESS, SQUARE_SIZE)  # Left
     ]
     
     pygame.draw.rect(screen, glow_color, bar_positions[bar_position])
@@ -211,11 +211,11 @@ def draw_terminal_border(screen, boat_speed, boat_acceleration, glow_value):
     small_font = get_font(12)
     
     labels = [
-        ("CONTROL ZONE", DARK_GREEN, 
+        ("NAVIGATION ZONE", DARK_GREEN, 
          OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE // 2, 
          OUTER_SQUARE_POS[1] - 2),
         
-        ("NAVIGATION ZONE", GREEN, 
+        ("CONTROL ZONE", GREEN, 
          SQUARE_POS[0] + SQUARE_SIZE // 2, 
          SQUARE_POS[1] - 2)
     ]

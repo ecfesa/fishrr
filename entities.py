@@ -35,7 +35,7 @@ class WindGust:
             self.wobble = random.uniform(0, 2 * math.pi)
             self.wobble_amount = random.uniform(0, min(15, abs(boat_acceleration) * 5))
         
-        # Set position based on direction - always from edge of square
+        # Set position based on direction - now using the inner square instead of outer
         if self.direction == 0:  # From top
             self.x = BOAT_CENTER[0]
             self.y = SQUARE_POS[1]
@@ -143,21 +143,21 @@ class WindGust:
             return
             
         if self.warning:
-            # Draw warning indicator based on direction
+            # Draw warning indicator based on direction, now on the OUTER square
             warn_length = 20
             warn_thickness = 2
             
             if self.direction == 0:  # Top
-                x, y = BOAT_CENTER[0], SQUARE_POS[1] + warn_thickness
+                x, y = BOAT_CENTER[0], OUTER_SQUARE_POS[1] + warn_thickness
                 pygame.draw.rect(screen, RED, (x - warn_length//2, y, warn_length, warn_thickness))
             elif self.direction == 1:  # Right
-                x, y = SQUARE_POS[0] + SQUARE_SIZE - warn_thickness, BOAT_CENTER[1]
+                x, y = OUTER_SQUARE_POS[0] + OUTER_SQUARE_SIZE - warn_thickness, BOAT_CENTER[1]
                 pygame.draw.rect(screen, RED, (x - warn_thickness, y - warn_length//2, warn_thickness, warn_length))
             elif self.direction == 2:  # Bottom
-                x, y = BOAT_CENTER[0], SQUARE_POS[1] + SQUARE_SIZE - warn_thickness
+                x, y = BOAT_CENTER[0], OUTER_SQUARE_POS[1] + OUTER_SQUARE_SIZE - warn_thickness
                 pygame.draw.rect(screen, RED, (x - warn_length//2, y - warn_thickness, warn_length, warn_thickness))
             elif self.direction == 3:  # Left
-                x, y = SQUARE_POS[0], BOAT_CENTER[1]
+                x, y = OUTER_SQUARE_POS[0], BOAT_CENTER[1]
                 pygame.draw.rect(screen, RED, (x, y - warn_length//2, warn_thickness, warn_length))
         else:
             # Draw wind gust as arrow - simple triangle shape
