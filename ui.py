@@ -66,31 +66,75 @@ def draw_menu(screen):
             pygame.draw.polygon(temp_surface, (180, 0, 0), [(40, 10), (70, 55), (10, 55)], 3)
             draw_menu.hydra_warning_img = temp_surface
     
-    # Position the hydra image
-    hydra_x = WIDTH // 2 - draw_menu.hydra_warning_img.get_width() // 2
-    hydra_y = title_y + 120
+    # Setup for image pulsing effect
+    image_center_x = WIDTH // 2
+    image_center_y = title_y + 120 + draw_menu.hydra_warning_img.get_height() // 2
     
-    # Add subtle pulsing effect to hydra image
-    pulse_scale = 1.0 + 0.02 * math.sin(pygame.time.get_ticks() * 0.005)
-    pulse_width = int(draw_menu.hydra_warning_img.get_width() * pulse_scale)
-    pulse_height = int(draw_menu.hydra_warning_img.get_height() * pulse_scale)
+    # Strong pulse effect (3% variation)
+    pulse_scale = 1.0 + 0.03 * math.sin(pygame.time.get_ticks() * 0.005)
     
-    # Scale and center the image with pulse effect
-    pulsed_hydra = pygame.transform.scale(draw_menu.hydra_warning_img, (pulse_width, pulse_height))
-    pulse_x = WIDTH // 2 - pulse_width // 2
-    pulse_y = hydra_y - (pulse_height - draw_menu.hydra_warning_img.get_height()) // 2
+    # Calculate dimensions
+    original_width = draw_menu.hydra_warning_img.get_width()
+    original_height = draw_menu.hydra_warning_img.get_height()
+    scaled_width = int(original_width * pulse_scale)
+    scaled_height = int(original_height * pulse_scale)
     
-    screen.blit(pulsed_hydra, (pulse_x, pulse_y))
+    # Create a temporary surface 30% larger than the original to ensure no clipping
+    render_width = int(original_width * 1.3)
+    render_height = int(original_height * 1.3)
+    temp_surface = pygame.Surface((render_width, render_height), pygame.SRCALPHA)
     
-    # Draw mission info box
-    hydra_bottom = pulse_y + pulsed_hydra.get_height()
+    # Create the pulsed image with smooth scaling
+    pulsed_image = pygame.transform.smoothscale(draw_menu.hydra_warning_img, (scaled_width, scaled_height))
+    
+    # Center the scaled image on the temporary surface
+    temp_x = (render_width - scaled_width) // 2
+    temp_y = (render_height - scaled_height) // 2
+    temp_surface.blit(pulsed_image, (temp_x, temp_y))
+    
+    # Calculate position for rendering (centered on the intended position)
+    render_x = image_center_x - render_width // 2
+    render_y = image_center_y - render_height // 2
+    
+    # Render the image
+    screen.blit(temp_surface, (render_x, render_y))
+
+    # REPOSITIONED: Draw controls box here between hydra image and mission box
+    controls_box_height = 65
+    controls_box_width = 520
+    
+    # Position the controls box right after the hydra image
+    hydra_bottom = render_y + render_height
+    controls_y = hydra_bottom + 2
+    
+    # Draw controls box
+    controls_box = pygame.Surface((controls_box_width, controls_box_height), pygame.SRCALPHA)
+    controls_box.fill((0, 30, 0, 200))
+    
+    screen.blit(controls_box, (WIDTH // 2 - controls_box_width // 2, controls_y))
+    
+    # Draw controls title
+    controls_title = get_font(16).render("CONTROLS:", True, GREEN)
+    screen.blit(controls_title, (WIDTH // 2 - controls_box_width // 2 + 10, controls_y + 5))
+    
+    # Draw control instructions
+    control_instructions = [
+        "• Use ARROW KEYS to position the bar",
+        "• Collect wind by positioning bar on opposite side"
+    ]
+    
+    for i, instruction in enumerate(control_instructions):
+        control_text = controls_font.render(instruction, True, GREEN)
+        screen.blit(control_text, (WIDTH // 2 - controls_box_width // 2 + 20, controls_y + 22 + i * 16))
+    
+    # Draw mission info box now positioned after controls
     mission_box_width = 500
-    mission_box_height = 80
+    mission_box_height = 70
     mission_box = pygame.Surface((mission_box_width, mission_box_height), pygame.SRCALPHA)
     mission_box.fill((0, 0, 0, 180))
-    mission_y = hydra_bottom + 10
+    mission_y = controls_y + controls_box_height + 2
     
-    screen.blit(mission_box, (WIDTH // 2 - mission_box_width // 2, mission_y - 10))
+    screen.blit(mission_box, (WIDTH // 2 - mission_box_width // 2, mission_y))
     
     # Draw mission text lines
     mission_lines = [
@@ -99,13 +143,12 @@ def draw_menu(screen):
         "WARNING: Multiple hydras may spawn as you progress!"
     ]
     
-    for line in mission_lines:
+    for i, line in enumerate(mission_lines):
         mission_text = mission_font.render(line, True, YELLOW)
-        screen.blit(mission_text, (WIDTH // 2 - mission_text.get_width() // 2, mission_y))
-        mission_y += 25
+        screen.blit(mission_text, (WIDTH // 2 - mission_text.get_width() // 2, mission_y + 5 + i * 20))
     
     # Draw options with glow effect
-    options_start_y = mission_y + 15
+    options_start_y = mission_y + mission_box_height + 2
     
     glow_intensity = 155 + int(100 * math.sin(pygame.time.get_ticks() * 0.003))
     glow_color = (0, glow_intensity, 0)
@@ -118,47 +161,18 @@ def draw_menu(screen):
     
     screen.blit(options_box, (WIDTH // 2 - options_box_width // 2, options_start_y - 5))
     
-    # Draw menu options
+    # Draw menu options with slightly less spacing
     options = [
         ("[ENTER] START VOYAGE", glow_color, options_start_y),
-        ("[ESC] ABANDON SHIP", GREEN, options_start_y + 35)
+        ("[ESC] ABANDON SHIP", GREEN, options_start_y + 30)  # Reduced from 35
     ]
     
     for text, color, y_pos in options:
         option_text = options_font.render(text, True, color)
         screen.blit(option_text, (WIDTH // 2 - option_text.get_width() // 2, y_pos))
     
-    # Show flashing prompt
-    prompt_y = options[1][2] + 40  # Position after last option
-    
-    # Draw controls info
-    controls_box_height = 75
-    controls_y = HEIGHT - BORDER_MARGIN - 45 - controls_box_height
-    
-    # Ensure minimum spacing between prompt and controls
-    if controls_y - prompt_y < 30:
-        controls_y = prompt_y + 35
-    
-    # Draw controls box
-    controls_box_width = 520
-    controls_box = pygame.Surface((controls_box_width, controls_box_height), pygame.SRCALPHA)
-    controls_box.fill((0, 30, 0, 200))
-    
-    screen.blit(controls_box, (WIDTH // 2 - controls_box_width // 2, controls_y - 5))
-    
-    # Draw controls title
-    controls_title = get_font(16).render("CONTROLS:", True, GREEN)
-    screen.blit(controls_title, (WIDTH // 2 - controls_box_width // 2 + 10, controls_y))
-    
-    # Draw control instructions
-    control_instructions = [
-        "• Use ARROW KEYS to position the bar",
-        "• Collect wind by positioning bar on opposite side"
-    ]
-    
-    for i, instruction in enumerate(control_instructions):
-        control_text = controls_font.render(instruction, True, GREEN)
-        screen.blit(control_text, (WIDTH // 2 - controls_box_width // 2 + 20, controls_y + 20 + i * 18))
+    # Show flashing prompt with modified position - move lower
+    prompt_y = options[1][2] + 40  # Increased from 30 to 40 to move lower
     
     # Draw flashing "Press ENTER" prompt
     if pygame.time.get_ticks() % 1000 < 500:
