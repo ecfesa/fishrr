@@ -2,15 +2,15 @@ from game.system.filesystem import FileSystem
 
 # The FileSystem instance will manage the entire file structure.
 # The old GAME_ROOT and _find function are no longer needed in the same way.
-fs = FileSystem(root_password=None) # Assuming root itself doesn't have a password as per old code.
+fs = FileSystem() # Assuming root itself doesn't have a password as per old code.
 
 def create_initial_filesystem(fs_instance: FileSystem):
     # System directories
-    fs_instance.mkdir("/bin", password="unguessable")
-    fs_instance.mkdir("/etc", password="unguessable")
-    fs_instance.mkdir("/usr", password="unguessable")
-    fs_instance.mkdir("/var", password="unguessable")
-    fs_instance.mkdir("/dev", password="unguessable")
+    fs_instance.mkdir("/bin")
+    fs_instance.mkdir("/etc")
+    fs_instance.mkdir("/usr")
+    fs_instance.mkdir("/var")
+    fs_instance.mkdir("/dev")
 
     # Temporary directory
     fs_instance.mkdir("/tmp")
@@ -35,7 +35,7 @@ Now check the backpack:
     fs_instance.mkdir("/home")
 
     # Island1 specific content
-    fs_instance.mkdir("/islands/island1", password="bemyguest")
+    fs_instance.mkdir("/islands/island1")
     fs_instance.write_file("/islands/island1/island1.txt", """This is a temporary file.         
 You can ignore it. Seriously!""")
     fs_instance.mkdir("/islands/island1/ground")

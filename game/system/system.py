@@ -196,7 +196,7 @@ class System:
             self.terminal.print("\n".join(out_lines) + "\n")
 
 
-    def cd(self, user_path: str = "/", password: str = "", *args, **kwargs):
+    def cd(self, user_path: str = "/", *args, **kwargs):
         # Handle `cd` (no args) -> go to home, but we don't have a user/home concept yet. Default to root.
         # current `cd` with no args `user_path` defaults to "/" which is fine.
         
@@ -210,22 +210,22 @@ class System:
                  self.terminal.print(f"cd: {user_path}: No such file or directory\n")
             return
 
-        # Get directory details for password checking
-        details_result = self.filesystem.get_directory_details(resolved_path)
-        if not details_result.success: # Should not happen if is_dir was true, but good practice
-            self.terminal.print(f"cd: cannot access '{user_path}': {details_result.error}\n")
-            return
+        # No password check needed anymore
+        # details_result = self.filesystem.get_directory_details(resolved_path)
+        # if not details_result.success: # Should not happen if is_dir was true, but good practice
+        #     self.terminal.print(f"cd: cannot access '{user_path}': {details_result.error}\n")
+        #     return
         
-        dir_password = details_result.value.get('password')
+        # dir_password = details_result.value.get('password')
 
-        if dir_password is not None:
-            if password == "":
-                self.terminal.print(f"cd: {user_path}: Password required\n")
-                # self.terminal.print("Usage: cd <path> <password>") # Maybe too verbose
-                return
-            if dir_password != password:
-                self.terminal.print(f"cd: {user_path}: Incorrect password\n")
-                return
+        # if dir_password is not None:
+        #     if password == "": # The user must provide the second arg for password
+        #         self.terminal.print(f"cd: {user_path}: Password required\n")
+        #         # self.terminal.print("Usage: cd <path> <password>") # Maybe too verbose
+        #         return
+        #     if dir_password != password:
+        #         self.terminal.print(f"cd: {user_path}: Incorrect password\n")
+        #         return
         
         self.shell.cwd = resolved_path
         # No output on successful cd

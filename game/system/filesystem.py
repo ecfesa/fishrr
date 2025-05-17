@@ -1,6 +1,10 @@
 from enum import Enum
 from game.system.path import FSPath # Import FSPath
 
+# Como o código funciona?
+# Nunca saberemos porque nunca leremos.
+#   - Sábio Murilo
+
 class Result:
     def __init__(self, success: bool, value=None, error: str | None = None):
         self.success: bool = success
@@ -21,10 +25,10 @@ class Result:
         return f"Result.err(error='{self.error}')"
 
 class Node:
-    def __init__(self, name: str, parent: 'Directory | None' = None, password: str | None = None):
+    def __init__(self, name: str, parent: 'Directory | None' = None, metadata: dict[str, any] | None = None):
         self.name: str = name
         self.parent: Directory | None = parent
-        self.password: str | None = password
+        self.metadata: dict[str, any] = metadata if metadata is not None else {}
 
     def get_path(self) -> str:
         if self.parent is None: # Should be root
@@ -42,8 +46,8 @@ class Node:
 
 
 class Directory(Node):
-    def __init__(self, name: str, parent: 'Directory | None' = None, children: list[Node] | None = None, password: str | None = None):
-        super().__init__(name, parent, password)
+    def __init__(self, name: str, parent: 'Directory | None' = None, children: list[Node] | None = None, metadata: dict[str, any] | None = None):
+        super().__init__(name, parent, metadata)
         self.children: list[Node] = children if children is not None else []
 
     def find_child(self, name: str) -> Node | None:
@@ -72,8 +76,8 @@ class Directory(Node):
 
 
 class File(Node):
-    def __init__(self, name: str, parent: 'Directory | None' = None, contents: str = "", password: str | None = None):
-        super().__init__(name, parent, password)
+    def __init__(self, name: str, parent: Directory | None = None, contents: str = "", metadata: dict[str, any] | None = None):
+        super().__init__(name, parent, metadata)
         self.contents: str = contents
     
     def accept(self, visitor: 'FSVisitor'):
@@ -81,11 +85,11 @@ class File(Node):
 
 
 class FileSystem:
-    def __init__(self, root_password: str | None = None):
+    def __init__(self):
         # The root directory's name is effectively empty for path purposes,
         # or could be considered "root" internally if needed for the Node object itself.
         # FSPath("/") will have an empty `name` and empty `components`.
-        self.root: Directory = Directory("", parent=None, password=root_password) # Root node's name is empty for path logic
+        self.root: Directory = Directory("", parent=None) # Root node's name is empty for path logic
 
     def _resolve_path(self, path_str: str, create_parents: bool = False, must_be_dir: bool | None = None, target_must_exist: bool = True) -> Result:
         """
@@ -173,7 +177,7 @@ class FileSystem:
              return Result.err(f"Path '{path_str}' is not a file.")
         return Result.ok(file_node.contents)
 
-    def write_file(self, path_str: str, contents: str, create_parents: bool = False, password: str | None = None) -> Result:
+    def write_file(self, path_str: str, contents: str, create_parents: bool = False, metadata: dict[str, any] | None = None) -> Result:
         fspath = FSPath(path_str)
         if fspath.is_root():
             return Result.err("Cannot write to root path directly as a file.")
@@ -198,11 +202,11 @@ class FileSystem:
             else:
                 return Result.err(f"Path '{path_str}' already exists and is a directory.")
         else:
-            new_file = File(name=file_name, parent=parent_dir, contents=contents, password=password)
+            new_file = File(name=file_name, parent=parent_dir, contents=contents, metadata=metadata)
             parent_dir.add_child(new_file)
             return Result.ok(new_file)
 
-    def mkdir(self, path_str: str, create_parents: bool = False, password: str | None = None) -> Result:
+    def mkdir(self, path_str: str, create_parents: bool = False, metadata: dict[str, any] | None = None) -> Result:
         fspath = FSPath(path_str)
         if fspath.is_root():
             return Result.ok(self.root) # Making root directory is idempotent
@@ -229,7 +233,7 @@ class FileSystem:
             else:
                 return Result.err(f"Path '{path_str}' already exists and is a file.")
         else:
-            new_dir = Directory(name=dir_name, parent=parent_dir, password=password)
+            new_dir = Directory(name=dir_name, parent=parent_dir, metadata=metadata)
             parent_dir.add_child(new_dir)
             return Result.ok(new_dir)
 
@@ -264,13 +268,13 @@ class FileSystem:
         if not isinstance(dir_node, Directory):
             return Result.err(f"Path '{path_str}' is not a directory.")
             
-        return Result.ok({'password': dir_node.password})
+        return Result.ok({}) # No password to return, return empty dict or specific details later
 
     def _deep_copy_node(self, node: Node, new_parent: Directory) -> Node:
         if isinstance(node, File):
-            return File(name=node.name, parent=new_parent, contents=node.contents, password=node.password)
+            return File(name=node.name, parent=new_parent, contents=node.contents, metadata=node.metadata.copy())
         elif isinstance(node, Directory):
-            new_dir = Directory(name=node.name, parent=new_parent, children=[], password=node.password)
+            new_dir = Directory(name=node.name, parent=new_parent, children=[], metadata=node.metadata.copy())
             for child in node.children:
                 copied_child = self._deep_copy_node(child, new_dir)
                 new_dir.children.append(copied_child) # Directly append, parent set in _deep_copy_node
@@ -441,6 +445,40 @@ class FileSystem:
         else:
             # This case should ideally not be reached if resolve_path and find_child work correctly.
             return Result.err(f"Failed to delete node '{path_str}'. Node not found in parent's children list.")
+
+    def set_metadata(self, path_str: str, key: str, value: any) -> Result:
+        resolve_result = self._resolve_path(path_str, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        node = resolve_result.value
+        node.metadata[key] = value
+        return Result.ok()
+
+    def get_metadata(self, path_str: str, key: str) -> Result:
+        resolve_result = self._resolve_path(path_str, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        node = resolve_result.value
+        if key not in node.metadata:
+            return Result.err(f"Metadata key '{key}' not found for '{path_str}'.")
+        return Result.ok(node.metadata[key])
+
+    def remove_metadata(self, path_str: str, key: str) -> Result:
+        resolve_result = self._resolve_path(path_str, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        node = resolve_result.value
+        if key not in node.metadata:
+            return Result.err(f"Metadata key '{key}' not found for '{path_str}'.")
+        del node.metadata[key]
+        return Result.ok()
+
+    def get_all_metadata(self, path_str: str) -> Result:
+        resolve_result = self._resolve_path(path_str, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        node = resolve_result.value
+        return Result.ok(node.metadata.copy()) # Return a copy to prevent external modification
 
 class FSVisitor:
     def visit_file(self, file_node: File):
