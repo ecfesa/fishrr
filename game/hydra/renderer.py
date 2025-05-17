@@ -1,7 +1,8 @@
 import pygame
 import math
-from constants import *
-from utils import get_font, draw_terminal_style_corner, draw_glow_color
+from game.hydra.constants import *
+from game.hydra.utils import draw_terminal_style_corner, draw_glow_color
+from game.assets import get_font, BOAT_IMAGE
 
 # Draw the bar based on its position with pulsing glow effect
 def draw_bar(screen, bar_position, glow_value):
@@ -104,7 +105,7 @@ def draw_boat(screen, boat_offset):
     # Try to load and cache boat image
     if not hasattr(draw_boat, 'boat_img'):
         try:
-            boat_img = pygame.image.load("sprites/boat.png").convert_alpha()
+            boat_img = BOAT_IMAGE.convert_alpha()
             # Scale image preserving aspect ratio
             original_width, original_height = boat_img.get_size()
             target_width = BOAT_SIZE + 10

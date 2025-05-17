@@ -5,6 +5,7 @@ from game.system.game_files import fs as game_fs_instance
 import game.manual as manual
 import game.globals as g # Import globals
 from game.state import GAME_STATE_INSTANCE
+from game.hydra.main_hydra import initialize_hydra_game # Import Hydra game initializer
 
 class System:
     def __init__(self, size_x: int, size_y: int):
@@ -339,4 +340,32 @@ class System:
         self.terminal.print("Fishing...\n")
 
     def flee(self, *args, **kwargs):
-        self.terminal.print("Fleeing...\n")
+        self.terminal.print("Attempting to flee... Engaging Hydra drive!\n")
+        # Initialize Hydra game if not already done
+        if g.HYDRA_GAME_INSTANCE is None:
+            # We need screen and clock. Assume they are available in g (WIN and a main clock)
+            # Let's assume main.py creates a global clock or we pass None and HydraGame creates one.
+            # For now, assuming g.WIN is the screen and we'll need a Pygame clock.
+            # The HydraGame class expects a pygame.time.Clock() object.
+            # This might need to be created in main.py and stored in g, or created here.
+            # For simplicity, if a global clock isn't available, we might need to adjust HydraGame
+            # or ensure main.py provides one in g.CLOCK.
+            
+            # Let's assume g.WIN and g.CLOCK exist from the main game setup
+            if hasattr(g, 'WIN') and hasattr(g, 'CLOCK'):
+                g.HYDRA_GAME_INSTANCE = initialize_hydra_game(g.WIN, g.CLOCK)
+                g.GAME_STATE = g.GAME_STATE_HYDRA
+            else:
+                self.terminal.print("Error: Main game screen (g.WIN) or clock (g.CLOCK) not found for Hydra game.\n")
+                return
+        else:
+            # If instance exists, perhaps reset it or ensure it's ready
+            # For now, just switch state. HydraGame's internal state should handle fresh start if needed.
+            g.HYDRA_GAME_INSTANCE.is_running = True # Ensure it's set to run
+            g.HYDRA_GAME_INSTANCE.game_over = False # Reset game over flag
+            # Reset internal state of Hydra game if necessary (e.g., go to its menu)
+            if hasattr(g.HYDRA_GAME_INSTANCE, 'hydra_game_state'):
+                g.HYDRA_GAME_INSTANCE.hydra_game_state.current_state = "menu" # Start from menu
+                g.HYDRA_GAME_INSTANCE.hydra_game_state.reset_game_variables()
+
+            g.GAME_STATE = g.GAME_STATE_HYDRA

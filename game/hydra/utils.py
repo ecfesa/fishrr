@@ -1,15 +1,6 @@
 import pygame
 import math
-from constants import *
-
-def get_font(size):
-    """Load the custom JetBrains Mono font with the specified size"""
-    try:
-        return pygame.font.Font("font/JetBrainsMono-Regular.ttf", size)
-    except:
-        # Fallback to system font if custom font fails to load
-        print("Warning: Could not load custom font. Using system font instead.")
-        return pygame.font.SysFont("Courier New", size)
+from game.hydra.constants import *
 
 def draw_terminal_style_corner(screen, color, x, y, size, is_top=True, is_left=True):
     """Draw a terminal-style corner (L-shape) with given parameters"""

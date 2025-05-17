@@ -1,9 +1,9 @@
 import pygame
 import math
 import random
-from constants import *
-from audio import play_sound
-
+from game.hydra.constants import *
+from game.hydra.audio import play_sound
+from game.assets import HYDRA_IMAGE
 # Wind gust class - Significantly harder with extreme speed/complexity at high accelerations
 class WindGust:
     def __init__(self, direction=None, boat_acceleration=0, difficulty_factor=1.0):
@@ -256,7 +256,7 @@ class Hydra:
         self.defeated = False  # Flag for when hydra is left behind
         
         # Load sprite image
-        self.original_image = pygame.image.load("sprites/hydra.png").convert_alpha()
+        self.original_image = HYDRA_IMAGE.convert_alpha()
         # Calculate scale to match desired width/height while preserving aspect ratio
         img_width, img_height = self.original_image.get_size()
         scale_factor = min(width / img_width, height / img_height)

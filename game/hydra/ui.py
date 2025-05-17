@@ -1,7 +1,8 @@
 import pygame
 import math
-from constants import *
-from utils import get_font, draw_terminal_style_corner
+from game.hydra.constants import *
+from game.assets import get_font, HYDRA_WARNING_IMAGE
+from game.hydra.utils import draw_terminal_style_corner
 
 def draw_menu(screen):
     """Draw the main menu screen with game title and options"""
@@ -53,7 +54,7 @@ def draw_menu(screen):
     if not hasattr(draw_menu, 'hydra_warning_img'):
         try:
             # Load and scale image
-            hydra_warning_img = pygame.image.load("sprites/hydra_warning.png").convert_alpha()
+            hydra_warning_img = HYDRA_WARNING_IMAGE.convert_alpha()
             original_width, original_height = hydra_warning_img.get_size()
             target_width = 80
             target_height = int((original_height * target_width) / original_width)
