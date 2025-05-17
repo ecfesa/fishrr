@@ -1,6 +1,7 @@
 import pygame
 
 from game.ui.draw_window import draw_window
+import game.assets as assets
 import game.globals as g
 import string
 
@@ -27,6 +28,7 @@ def process_input(event: pygame.event.Event):
     else:
         if event.unicode == "" or event.unicode not in ALLOWED_CHARS:
             return
+        assets.KEYBOARD_SOUND.play()
         g.SYSTEM.process_input(event.unicode)
 
 def run():
