@@ -21,20 +21,26 @@ class FishingScene:
         self.GRID_COLOR = (40, 40, 60)
         self.TEXT_COLOR = (180, 180, 220)
 
-        self.background = pygame.Surface((self.width, self.height))
+        self.background_surface = pygame.Surface((self.width, self.height))
+        self._render_static_elements()
         
-    def draw_background(self):
+    def _render_static_elements(self):
+        """Renders static elements like background and info text once onto self.background_surface."""
         # Fill with dark background color
-        self.screen.fill(self.BACKGROUND)
-            
+        self.background_surface.fill(self.BACKGROUND)
+
         # Draw info text at the bottom
         self.info_text.clear()
         self.info_text.html("SPACE to start fishing | ESC to exit")
         self.info_text.add_style(0, len("SPACE to start fishing | ESC to exit"), COLOR, self.TEXT_COLOR)
         self.info_text.update()
-        
+
         text_rect = self.info_text.area.get_rect(midbottom=(self.width // 2, self.height - 10))
-        self.screen.blit(self.info_text.area, text_rect)
+        self.background_surface.blit(self.info_text.area, text_rect)
+        
+    def draw_background(self):
+        # Blit the pre-rendered background surface
+        self.screen.blit(self.background_surface, (0, 0))
     
     def update(self):
         self.fishing_minigame.update()

@@ -660,14 +660,4 @@ class FishingMinigame:
         keys = pygame.key.get_pressed()
         if self.state == FishingState.BATTLE and keys[pygame.K_SPACE]:
             # Apply upward force when space is held - increased significantly
-            self.battle_bar_velocity -= 1.5 * self.battle_difficulty 
-
-    def cleanup_state_resources(self, old_state, new_state):
-        # Clear unused surfaces when transitioning states
-        if old_state == FishingState.TUTORIAL and new_state != FishingState.TUTORIAL:
-            # Clear tutorial surfaces
-            self.tutorial_text = None
-            # Clean relevant entries from text_cache
-            keys_to_remove = [k for k in self.text_cache if "TUTORIAL" in str(k[0])]
-            for key in keys_to_remove:
-                del self.text_cache[key] 
+            self.battle_bar_velocity -= 1.5 * self.battle_difficulty
