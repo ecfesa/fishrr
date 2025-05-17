@@ -27,13 +27,13 @@ try:
     font_path = "font/JetBrainsMono-Regular.ttf"
     if os.path.exists(font_path):
         TITLE_FONT = pygame.font.Font(font_path, 30) # Increased title font size
-        BODY_FONT = pygame.font.Font(font_path, 18)
-        EXAMPLE_FONT = pygame.font.Font(font_path, 16)
+        BODY_FONT = pygame.font.Font(font_path, 14)
+        EXAMPLE_FONT = pygame.font.Font(font_path, 13)
     else:
         # Final fallback to system fonts if custom font not available
         TITLE_FONT = pygame.font.SysFont("consolas", 30) # Increased title font size
-        BODY_FONT = pygame.font.SysFont("consolas", 18)
-        EXAMPLE_FONT = pygame.font.SysFont("consolas", 16)
+        BODY_FONT = pygame.font.SysFont("consolas", 14)
+        EXAMPLE_FONT = pygame.font.SysFont("consolas", 13)
 except:
     # Final fallback to system fonts if custom font not available
     TITLE_FONT = pygame.font.SysFont("consolas", 30) # Increased title font size
@@ -187,7 +187,7 @@ class CommandList:
         # DOWN scroll button positioning
         self.down_button_rect = pygame.Rect(0, 0, self.scroll_button_width, self.scroll_button_height)
         self.down_button_rect.centerx = WIDTH // 2
-        self.down_button_rect.bottom = HEIGHT - self.screen_margin
+        self.down_button_rect.bottom = HEIGHT - self.screen_margin - 10 # Added 10px bottom padding for the list area
         
         # Calculate command area height (space available for command entries)
         # This is the bottom limit for where command content can be drawn.
@@ -296,7 +296,7 @@ class CommandList:
             desc_render_details = {"is_present": False, "height": 0, "surfaces": []}
             if is_expanded_flag:
                 desc_str = cmd_info_dict["desc"]
-                max_desc_width_pixels = WIDTH - 2 * self.screen_margin - 150 - 25 # available width for desc
+                max_desc_width_pixels = WIDTH - 2 * self.screen_margin - 20 - 25 # available width for desc, -20 for left padding
                 
                 words = desc_str.split(' ')
                 lines = []
@@ -336,7 +336,7 @@ class CommandList:
                 # Padding for example box: 5px top/bottom inside box, 10px left/right inside.
                 # Additional gap between main command line and example box.
                 ex_box_vertical_padding_content = 10 # 5 top + 5 bottom for text within box lines
-                ex_box_top_margin = 5 # Gap between command line and example box border
+                ex_box_top_margin = 10 # Gap between command line/description and example box border
                                 
                 example_section_visual_height = ex_title_h + ex_lines_h + ex_box_vertical_padding_content
                 
@@ -344,6 +344,9 @@ class CommandList:
                 total_example_section_added_height = example_section_visual_height + ex_box_top_margin
                 current_item_total_draw_height += total_example_section_added_height
                 
+                # Add a small gap after the example section before the next command
+                current_item_total_draw_height += 10 # Gap after example
+                                
                 example_render_details = {
                     "is_present": True, "height": example_section_visual_height, 
                     "top_margin": ex_box_top_margin,
@@ -441,12 +444,13 @@ class CommandList:
                 
                 if is_expanded and desc_details["is_present"]:
                     current_desc_y = y_pos_item_start + BODY_FONT.get_height() + 5 # Start below command name
+                    desc_left_padding = 20 # Added padding for expanded description
                     for line_surface in desc_details["surfaces"]:
                         if current_desc_y + line_surface.get_height() <= self.command_area_bottom_limit + self.line_height :
-                             surface.blit(line_surface, (self.screen_margin + 10, current_desc_y)) # Full width for expanded desc
+                             surface.blit(line_surface, (self.screen_margin + 10 + desc_left_padding, current_desc_y)) # Indent expanded desc
                         current_desc_y += line_surface.get_height()
                 elif not is_expanded:
-                    max_desc_width_pixels = (WIDTH - self.screen_margin - 20 - desc_x_start) 
+                    max_desc_width_pixels = (WIDTH - self.screen_margin - 20 - desc_x_start)
                     desc_str = cmd_info["desc"]
                     avg_char_width = BODY_FONT.size("A")[0]
                     if avg_char_width > 0:
