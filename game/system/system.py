@@ -23,6 +23,8 @@ class System:
         self.shell.register_cmd("tree", self.tree)
         self.shell.register_cmd("man", self.man)
         self.shell.register_cmd("think", self.think)
+        self.shell.register_cmd("fish", self.fish)
+        self.shell.register_cmd("flee", self.flee)
 
         # Initialize first automatic commands
         self.shell.add_auto_text("ls / # Press enter to confirm command\r")
@@ -317,7 +319,6 @@ class System:
 
     def man(self, *args, **kwargs):
         self.terminal.print("Launching manual...\n")
-        # manual.run() # Old way
 
         g.GAME_STATE = g.GAME_STATE_MANUAL
         if g.MANUAL_VIEW_INSTANCE is None:
@@ -333,3 +334,9 @@ class System:
         
     def think(self, *args, **kwargs):
         self.terminal.print(GAME_STATE_INSTANCE.get_thinking_text()+'\n')
+
+    def fish(self, *args, **kwargs):
+        self.terminal.print("Fishing...\n")
+
+    def flee(self, *args, **kwargs):
+        self.terminal.print("Fleeing...\n")
