@@ -139,9 +139,9 @@ class System:
             children = node.children
             for child in children:
                 if isinstance(child, Directory):
-                    out += "📁 " + child.name + "\n"
+                    out += "[D] " + child.name + "\n"
                 elif isinstance(child, File):
-                    out += "🗎 " + child.name + "\n"
+                    out += "[F] " + child.name + "\n"
         elif node is None:
             out = "Error: current directory not found.\n"
         else:

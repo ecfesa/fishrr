@@ -56,5 +56,30 @@ islands.children = [
 island1 = _find(islands, "island1")
 island1.children = [
     File("island1.txt", island1, """This is a temporary file.         
-You can ignore it. Seriously!""")
+You can ignore it. Seriously!"""),
+    Directory("ground", island1),
+    Directory("forest", island1),
+    Directory("fish_pond", island1),
+]
+
+# Add ground items
+ground = _find(island1, "ground")
+ground.children = [
+    File("fishing_rod.item", ground, """A sturdy fishing rod."""),
+    File("fishing_line.item", ground, """Strong fishing line."""),
+    File("bucket.item", ground, """A metal bucket for carrying things."""),
+]
+
+# Add forest items
+forest = _find(island1, "forest")
+forest.children = [
+    File("wood.item", forest, """Pieces of wood collected from the forest."""),
+    File("can_of_worms.item", forest, """A tin can full of wriggling worms. Perfect for fishing."""),
+    File("sail.item", forest, """A large piece of cloth that could be used as a sail."""),
+]
+
+# Add fish_pond directory (empty folder for fishes)
+fish_pond = _find(island1, "fish_pond")
+fish_pond.children = [
+    Directory("fishes", fish_pond),
 ]
