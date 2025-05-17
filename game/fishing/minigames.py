@@ -1,17 +1,17 @@
 import pygame
 import random
-from settings import (
-    screen, SCREEN_WIDTH, SCREEN_HEIGHT, GameState, 
-    font, small_font, WHITE, RED, 
+from .settings import (
+    SCREEN_WIDTH, SCREEN_HEIGHT, GameState, # screen removed, passed in constructor
+    font, small_font, WHITE, RED, BLACK,
     DARK_BLUE # For clearing screen or specific backgrounds if needed
 )
-from drawing import draw_qte_screen, draw_battle_screen, draw_text
-from items import Fish, TrashItem, FishDifficulty # For type checking and difficulty access
+from .drawing import draw_qte_screen, draw_battle_screen, draw_text
+from .items import Fish, TrashItem, FishDifficulty # For type checking and difficulty access
 
 class FishingMinigame:
-    def __init__(self, current_item):
+    def __init__(self, current_item, screen_surface_param):
         self.current_item = current_item
-        self.screen_surface = screen # Use the global screen from settings
+        self.screen_surface = screen_surface_param # Use passed screen surface
 
         # QTE variables
         self.qte_active = False

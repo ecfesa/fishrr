@@ -1,12 +1,12 @@
 import pygame
-from settings import (
+from .settings import (
     SCREEN_WIDTH, SCREEN_HEIGHT, 
     BLACK, WHITE, GREEN, RED, BLUE, DARK_BLUE, GRAY, 
     font, small_font, tutorial_font,
     CAST_PERFECTION_ZONES # Import the new zones
 )
-from items import FishableType # For draw_result_screen
-from assets import *
+from .items import FishableType # For draw_result_screen
+from .assets import *
 
 def draw_text(text, font, color, surface, x, y, center=True):
     textobj = font.render(text, 1, color)
@@ -21,12 +21,11 @@ def draw_idle_screen(surface):
     
     surface.fill(BLACK)
     
-    """
-    if PLAYER_IDLE_SPRITE:
+    # Check if PLAYER_IDLE_SPRITE is loaded (imported from assets)
+    if 'PLAYER_IDLE_SPRITE' in globals() and PLAYER_IDLE_SPRITE:
         # Position player sprite (example: bottom center)
         player_rect = PLAYER_IDLE_SPRITE.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - PLAYER_IDLE_SPRITE.get_height() // 2 - 20))
         surface.blit(PLAYER_IDLE_SPRITE, player_rect)
-    """
     
     draw_text("Fishrr", font, WHITE, surface, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4) 
     draw_text("Press and hold SPACE to start fishing", small_font, WHITE, surface, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2) 
@@ -64,9 +63,11 @@ def draw_casting_screen(surface, cast_power):
     
     surface.fill(BLACK) 
     
-    if CASTING_SPRITE:
+    # Check if CASTING_SPRITE is loaded (imported from assets)
+    if 'CASTING_SPRITE' in globals() and CASTING_SPRITE:
         # Position player casting sprite (example: bottom center)
-        player_rect = CASTING_SPRITE.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - PLAYER_CASTING_SPRITE.get_height() // 2 - 20))
+        # Corrected variable name from PLAYER_CASTING_SPRITE to CASTING_SPRITE
+        player_rect = CASTING_SPRITE.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - CASTING_SPRITE.get_height() // 2 - 20))
         surface.blit(CASTING_SPRITE, player_rect)
     else: # Fallback text if player sprite not loaded
         draw_text("Player Casting", small_font, WHITE, surface, SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)
@@ -151,12 +152,11 @@ def draw_battle_screen(surface, fish_pos_y, player_bar_pos_y, catch_progress, ta
     fish_icon_size = 30 # This might be determined by the loaded sprite's dimensions
     fish_rect = pygame.Rect(battle_area_x + (battle_area_width - fish_icon_size) // 2, battle_area_y + fish_pos_y, fish_icon_size, fish_icon_size)
     
-    """
-    if FISH_ICON_PLACEHOLDER: # TODO: Later, use specific fish icons based on target_fish_name
+    # Check if FISH_ICON_PLACEHOLDER is loaded
+    if 'FISH_ICON_PLACEHOLDER' in globals() and FISH_ICON_PLACEHOLDER: 
         surface.blit(FISH_ICON_PLACEHOLDER, fish_rect.topleft)
     else:     
-    """
-    pygame.draw.ellipse(surface, RED, fish_rect) 
+        pygame.draw.ellipse(surface, RED, fish_rect) 
     pygame.draw.rect(surface, BLACK, fish_rect, 1)
 
     progress_bar_width = 30
@@ -178,17 +178,17 @@ def draw_result_screen(surface, caught_fish, success):
     icon_to_draw = None
     item_name_for_icon = ""
 
-    """
+    # Check if sprites are loaded before trying to use them
+    fish_icon_loaded = 'FISH_ICON_PLACEHOLDER' in globals() and FISH_ICON_PLACEHOLDER
+    trash_icon_loaded = 'TRASH_ICON_PLACEHOLDER' in globals() and TRASH_ICON_PLACEHOLDER
 
     if caught_fish:
         item_name_for_icon = caught_fish.name
-        if caught_fish.type == FishableType.FISH and FISH_ICON_PLACEHOLDER:
-            icon_to_draw = FISH_ICON_PLACEHOLDER # TODO: map to specific fish icons if available
-        elif caught_fish.type == FishableType.TRASH and TRASH_ICON_PLACEHOLDER:
+        if caught_fish.type == FishableType.FISH and fish_icon_loaded:
+            icon_to_draw = FISH_ICON_PLACEHOLDER 
+        elif caught_fish.type == FishableType.TRASH and trash_icon_loaded:
             icon_to_draw = TRASH_ICON_PLACEHOLDER
         
-    """
-
     if icon_to_draw:
         icon_rect = icon_to_draw.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 70))
         surface.blit(icon_to_draw, icon_rect)

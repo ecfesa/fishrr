@@ -1,8 +1,11 @@
 import pygame
-from settings import SCREEN_WIDTH, SCREEN_HEIGHT # For potential scaling
-
+from .settings import SCREEN_WIDTH, SCREEN_HEIGHT # For potential scaling
+import os
 # Asset paths
-ASSET_PATH = "./assets/" # Changed from SPRITE_PATH
+# Construct path relative to this file (assets.py)
+# Assumes images are in fishrr/game/assets/images/
+_assets_py_dir = os.path.dirname(__file__)
+ASSET_PATH = os.path.join(_assets_py_dir, "..", "assets", "images") 
 # IMAGE_PATH = "./assets/images/" # Not used if all are in ./assets/
 # SOUND_PATH = "./assets/sounds/" # For future use
 
@@ -10,9 +13,11 @@ ASSET_PATH = "./assets/" # Changed from SPRITE_PATH
 def load_image(filename: str, scale: tuple[int, int] | None = None, use_alpha: bool = False):
     """Loads an image, converts it (with alpha for transparency), and optionally scales it."""
     try:
-        image = pygame.image.load(ASSET_PATH + filename)
+        # Ensure the full path to the image is used
+        full_image_path = os.path.join(ASSET_PATH, filename)
+        image = pygame.image.load(full_image_path)
     except pygame.error as message:
-        print(f"Cannot load image from {ASSET_PATH + filename}: {message}")
+        print(f"Cannot load image from {full_image_path}: {message}")
         # Return a placeholder surface or raise error, depending on desired handling
         # For now, let's create a small red square as a fallback visual cue
         fallback_surface = pygame.Surface((30, 30) if not scale else scale)
@@ -42,10 +47,22 @@ LONG_CATCH_SPRITE = None
 
 CASTING_SPRITE = None
 
+# Additional sprites that drawing.py expects (initialize as None)
+PLAYER_IDLE_SPRITE = None
+FISH_ICON_PLACEHOLDER = None
+TRASH_ICON_PLACEHOLDER = None
+
 def load_all_assets():
+    global CLOSE_BAIT_SPRITE, MID_BAIT_SPRITE, LONG_BAIT_SPRITE
+    global CLOSE_CATCH_SPRITE, MID_CATCH_SPRITE, LONG_CATCH_SPRITE
+    global CASTING_SPRITE
+    global PLAYER_IDLE_SPRITE, FISH_ICON_PLACEHOLDER, TRASH_ICON_PLACEHOLDER
 
     print("Loading assets...")
     try:
+        # Example: PLAYER_IDLE_SPRITE = load_image("player_idle.png", scale=(100,150))
+        # Example: FISH_ICON_PLACEHOLDER = load_image("fish_icon.png", scale=(30,30))
+        # Example: TRASH_ICON_PLACEHOLDER = load_image("trash_icon.png", scale=(30,30))
 
         CLOSE_BAIT_SPRITE = load_image("close_bait_throw.png", scale=(100, 150))
         MID_BAIT_SPRITE = load_image("mid_bait_throw.png", scale=(100, 150))

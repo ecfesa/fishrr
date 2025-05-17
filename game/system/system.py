@@ -6,6 +6,7 @@ import game.manual as manual
 import game.globals as g # Import globals
 from game.state import GAME_STATE_INSTANCE
 from game.hydra.main_hydra import initialize_hydra_game # Import Hydra game initializer
+from game.fishing.main import run_fishing_game # Import the fishing game function
 
 class System:
     def __init__(self, size_x: int, size_y: int):
@@ -337,7 +338,17 @@ class System:
         self.terminal.print(GAME_STATE_INSTANCE.get_thinking_text()+'\n')
 
     def fish(self, *args, **kwargs):
-        self.terminal.print("Fishing...\n")
+        self.terminal.print("Initializing fishing sequence...\n")
+        # Potentially hide or clear the terminal view before launching Pygame
+        # For now, we assume Pygame will take over the display.
+        run_fishing_game()
+        # After Pygame quits, the terminal might need to be redrawn or restored.
+        # This depends on how the main application handles screen updates.
+        # For now, just printing a message to indicate return.
+        self.terminal.print("Returned from fishing.\n")
+        # It might be necessary to re-render the terminal or clear Pygame's remnants.
+        # self.shell.clear() # Example: clear the terminal content
+        # self.terminal.render() # Example: force re-render if terminal has such a method
 
     def flee(self, *args, **kwargs):
         self.terminal.print("Attempting to flee... Engaging Hydra drive!\n")

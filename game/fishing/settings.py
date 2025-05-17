@@ -1,5 +1,6 @@
 import pygame
 from enum import Enum
+import os
 
 # Initialize Pygame
 pygame.init()
@@ -43,10 +44,11 @@ class GameState(Enum):
     RESULT = 6
 
 # Fonts
+font_path = os.path.join(os.path.dirname(__file__), "JetBrainsMono-Regular.ttf")
 try:
-    font = pygame.font.Font("./JetBrainsMono-Regular.ttf", 36)
-    small_font = pygame.font.Font("./JetBrainsMono-Regular.ttf", 18)
-    tutorial_font = pygame.font.Font("./JetBrainsMono-Regular.ttf", 14)
+    font = pygame.font.Font(font_path, 36)
+    small_font = pygame.font.Font(font_path, 18)
+    tutorial_font = pygame.font.Font(font_path, 14)
 except pygame.error as e:
     print(f"Font file not found or error loading font: {e}. Using default font.")
     font = pygame.font.Font(None, 74) # Fallback
