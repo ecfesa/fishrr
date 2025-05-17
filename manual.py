@@ -8,13 +8,13 @@ import os
 pygame.init()
 
 # Colors - Update to fishing theme
-BACKGROUND_COLOR = (9, 42, 72)     # Deep sea blue (#092A48)
-BORDER_COLOR = (103, 155, 178)     # Light blue (#679BAE) 
-TITLE_COLOR = (230, 230, 235)      # Off-white (#E6E6EB)
-TEXT_COLOR = (210, 226, 235)       # Light blue gray (#D2E2EB)
-HIDDEN_COLOR = (30, 60, 90)        # Very dark blue, almost invisible
-HIGHLIGHT_COLOR = (150, 185, 200)  # Highlighted command color
-EXAMPLE_COLOR = (180, 200, 215)    # Example text color
+BACKGROUND_COLOR = (0, 0, 0)         # Black
+BORDER_COLOR = (0, 128, 0)       # Green
+TITLE_COLOR = (0, 255, 0)        # Bright Green
+TEXT_COLOR = (0, 200, 0)         # Medium Green
+HIDDEN_COLOR = (0, 50, 0)          # Dark Green, almost invisible
+HIGHLIGHT_COLOR = (0, 100, 0)    # Darker Green for highlight
+EXAMPLE_COLOR = (0, 180, 0)      # Lighter Green for examples
 
 # Window dimensions
 WIDTH, HEIGHT = 480, 640
@@ -26,17 +26,17 @@ PADDING = 20
 try:
     font_path = "font/JetBrainsMono-Regular.ttf"
     if os.path.exists(font_path):
-        TITLE_FONT = pygame.font.Font(font_path, 24)
+        TITLE_FONT = pygame.font.Font(font_path, 30) # Increased title font size
         BODY_FONT = pygame.font.Font(font_path, 18)
         EXAMPLE_FONT = pygame.font.Font(font_path, 16)
     else:
         # Final fallback to system fonts if custom font not available
-        TITLE_FONT = pygame.font.SysFont("consolas", 24)
+        TITLE_FONT = pygame.font.SysFont("consolas", 30) # Increased title font size
         BODY_FONT = pygame.font.SysFont("consolas", 18)
         EXAMPLE_FONT = pygame.font.SysFont("consolas", 16)
 except:
     # Final fallback to system fonts if custom font not available
-    TITLE_FONT = pygame.font.SysFont("consolas", 24)
+    TITLE_FONT = pygame.font.SysFont("consolas", 30) # Increased title font size
     BODY_FONT = pygame.font.SysFont("consolas", 18)
     EXAMPLE_FONT = pygame.font.SysFont("consolas", 16)
 
@@ -156,6 +156,7 @@ class CommandList:
         self.discovered = discovered
         self.expanded_command = None
         self.scroll_offset = 0
+        self.active_buttons_feedback = {} # For visual feedback on key press
 
         # Layout constants
         self.screen_margin = 20  # Increased outer margin
@@ -168,11 +169,11 @@ class CommandList:
 
         # Title positioning
         title_text_height = TITLE_FONT.get_height()
-        self.title_rect_center_y = self.screen_margin + self.title_extra_padding_top + title_text_height // 2
+        self.title_rect_center_y = self.screen_margin + self.title_extra_padding_top + title_text_height // 2 + 5 # Adjusted for new font size
         title_bottom = self.title_rect_center_y + title_text_height // 2
         
         # Horizontal line below title
-        self.title_line_y = title_bottom + self.content_padding 
+        self.title_line_y = title_bottom + self.content_padding + 5 # Adjusted for new font size
 
         # UP scroll button positioning
         up_button_top_y = self.title_line_y + self.content_padding
@@ -198,6 +199,13 @@ class CommandList:
         else:
             self.max_visible_commands_unexpanded = self.command_area_height // self.line_height
     
+    def set_button_feedback(self, button_key: str, active: bool):
+        """Set feedback state for a button (e.g., scroll up/down)."""
+        if active:
+            self.active_buttons_feedback[button_key] = pygame.time.get_ticks() # Store time for animation
+        elif button_key in self.active_buttons_feedback:
+            del self.active_buttons_feedback[button_key]
+
     def toggle_command(self, command: str):
         """Toggle expansion of a command."""
         if self.expanded_command == command:
@@ -240,8 +248,19 @@ class CommandList:
         # Draw Scroll Buttons
         up_text_render = BODY_FONT.render("▲", True, TEXT_COLOR)
         down_text_render = BODY_FONT.render("▼", True, TEXT_COLOR)
-        up_button_bg_color = HIGHLIGHT_COLOR if mouse_pos and self.up_button_rect.collidepoint(mouse_pos) else BORDER_COLOR
-        down_button_bg_color = HIGHLIGHT_COLOR if mouse_pos and self.down_button_rect.collidepoint(mouse_pos) else BORDER_COLOR
+        
+        up_button_bg_color = BORDER_COLOR
+        if "scroll_up" in self.active_buttons_feedback and pygame.time.get_ticks() - self.active_buttons_feedback["scroll_up"] < 200: # 200ms feedback
+            up_button_bg_color = HIGHLIGHT_COLOR
+        elif mouse_pos and self.up_button_rect.collidepoint(mouse_pos):
+            up_button_bg_color = HIGHLIGHT_COLOR
+            
+        down_button_bg_color = BORDER_COLOR
+        if "scroll_down" in self.active_buttons_feedback and pygame.time.get_ticks() - self.active_buttons_feedback["scroll_down"] < 200: # 200ms feedback
+            down_button_bg_color = HIGHLIGHT_COLOR
+        elif mouse_pos and self.down_button_rect.collidepoint(mouse_pos):
+            down_button_bg_color = HIGHLIGHT_COLOR
+
         pygame.draw.rect(surface, up_button_bg_color, self.up_button_rect, border_radius=4)
         pygame.draw.rect(surface, down_button_bg_color, self.down_button_rect, border_radius=4)
         up_text_rect = up_text_render.get_rect(center=self.up_button_rect.center)
@@ -249,6 +268,12 @@ class CommandList:
         surface.blit(up_text_render, up_text_rect)
         surface.blit(down_text_render, down_text_rect)
 
+        # Add navigation hint text
+        hint_font = pygame.font.Font(font_path, 14) if os.path.exists(font_path) else pygame.font.SysFont("consolas", 14)
+        hint_text_surface = hint_font.render("Use UP/DOWN arrow keys to scroll", True, TEXT_COLOR)
+        hint_text_rect = hint_text_surface.get_rect(centerx=WIDTH // 2, top=self.down_button_rect.bottom + 5)
+        surface.blit(hint_text_surface, hint_text_rect)
+        
         clickable_areas = [(self.up_button_rect, "scroll_up"), (self.down_button_rect, "scroll_down")]
         
         cmd_keys = list(self.commands.keys())
@@ -266,6 +291,38 @@ class CommandList:
 
             # Height of the command's main line (name, desc, indicator) + its bottom padding
             main_line_total_height = self.line_height 
+            
+            # Calculate description height if expanded
+            desc_render_details = {"is_present": False, "height": 0, "surfaces": []}
+            if is_expanded_flag:
+                desc_str = cmd_info_dict["desc"]
+                max_desc_width_pixels = WIDTH - 2 * self.screen_margin - 150 - 25 # available width for desc
+                
+                words = desc_str.split(' ')
+                lines = []
+                current_line = ""
+                for word in words:
+                    if BODY_FONT.size(current_line + word)[0] <= max_desc_width_pixels:
+                        current_line += word + " "
+                    else:
+                        lines.append(current_line.strip())
+                        current_line = word + " "
+                lines.append(current_line.strip())
+                
+                desc_surfaces = [BODY_FONT.render(line, True, TEXT_COLOR) for line in lines]
+                desc_total_height = sum(s.get_height() for s in desc_surfaces)
+                
+                desc_render_details = {
+                    "is_present": True, 
+                    "height": desc_total_height, 
+                    "surfaces": desc_surfaces
+                }
+                # Adjust main_line_total_height if description is now part of the "main" area when expanded
+                # The original self.line_height was for a single line. Now we have potentially multi-line description.
+                # We need to account for the name line + the multi-line description.
+                # Let's assume the command name is one line.
+                main_line_total_height = BODY_FONT.get_height() + 5 # Command name + some padding
+                main_line_total_height += desc_total_height + 5 # Add height of wrapped description + padding
             
             current_item_total_draw_height = main_line_total_height
             
@@ -291,7 +348,8 @@ class CommandList:
                     "is_present": True, "height": example_section_visual_height, 
                     "top_margin": ex_box_top_margin,
                     "texts": examples_text_list, "title_h": ex_title_h, 
-                    "box_padding_content": ex_box_vertical_padding_content
+                    "box_padding_content": ex_box_vertical_padding_content,
+                    "item_y_start_for_box": current_y_cumulative + main_line_total_height # Y where example box starts
                 }
             
             # Stop adding if the very top of the non-expanded part of this command is already beyond the drawing area limit.
@@ -309,7 +367,8 @@ class CommandList:
             visible_command_details.append({
                 "key": cmd_key, "info": cmd_info_dict,
                 "y_start_coord": current_y_cumulative, 
-                "main_line_h": main_line_total_height, # Includes padding for the command line itself
+                "main_line_h": main_line_total_height, 
+                "desc_details": desc_render_details, # Store desc details
                 "total_item_h": current_item_total_draw_height,
                 "is_expanded": is_expanded_flag, 
                 "example_details": example_render_details
@@ -323,6 +382,7 @@ class CommandList:
             cmd_info = item_data["info"]
             y_pos_item_start = item_data["y_start_coord"]
             is_expanded = item_data["is_expanded"]
+            desc_details = item_data["desc_details"]
             
             # Clip drawing to the command area
             # Note: Pygame's blit and draw operations are clipped by surface boundaries,
@@ -351,6 +411,9 @@ class CommandList:
             # Clickable area for the main command line
             # Use BODY_FONT.get_height() for the clickable height of the primary line.
             cmd_click_rect_height = BODY_FONT.get_height()
+            if is_expanded: # If expanded, the clickable area might span the command name and the description
+                 cmd_click_rect_height = BODY_FONT.get_height() # Just the command name line is clickable to toggle
+            
             cmd_click_rect = pygame.Rect(
                 self.screen_margin, y_pos_item_start, 
                 WIDTH - 2 * self.screen_margin, cmd_click_rect_height
@@ -374,20 +437,26 @@ class CommandList:
 
                 # Command Description
                 desc_x_start = self.screen_margin + 150 
-                max_desc_width_pixels = (WIDTH - self.screen_margin - 20 - desc_x_start) # Space for desc before indicator
+                desc_y_start = y_pos_item_start
                 
-                desc_str = cmd_info["desc"]
-                if not is_expanded:
+                if is_expanded and desc_details["is_present"]:
+                    current_desc_y = y_pos_item_start + BODY_FONT.get_height() + 5 # Start below command name
+                    for line_surface in desc_details["surfaces"]:
+                        if current_desc_y + line_surface.get_height() <= self.command_area_bottom_limit + self.line_height :
+                             surface.blit(line_surface, (self.screen_margin + 10, current_desc_y)) # Full width for expanded desc
+                        current_desc_y += line_surface.get_height()
+                elif not is_expanded:
+                    max_desc_width_pixels = (WIDTH - self.screen_margin - 20 - desc_x_start) 
+                    desc_str = cmd_info["desc"]
                     avg_char_width = BODY_FONT.size("A")[0]
                     if avg_char_width > 0:
                         max_chars = max_desc_width_pixels // avg_char_width
                         if len(desc_str) > max_chars:
                             desc_str = desc_str[:max_chars-3] + "..."
-                    else: # Fallback if font size is weird
+                    else: 
                         desc_str = desc_str[:15] + "..." if len(desc_str) > 18 else desc_str
-                
-                desc_text_surface = BODY_FONT.render(desc_str, True, TEXT_COLOR)
-                surface.blit(desc_text_surface, (desc_x_start, y_pos_item_start))
+                    desc_text_surface = BODY_FONT.render(desc_str, True, TEXT_COLOR)
+                    surface.blit(desc_text_surface, (desc_x_start, desc_y_start))
 
                 # Expansion Indicator
                 expand_indicator_char = "▼" if is_expanded else "▶"
@@ -398,7 +467,9 @@ class CommandList:
                 if is_expanded:
                     ex_details = item_data["example_details"]
                     # Y where the example box border starts
-                    example_box_start_y = y_pos_item_start + BODY_FONT.get_height() + 5 # Small gap after main text line
+                    # This now needs to be relative to the bottom of the (potentially multi-line) description
+                    desc_total_height = desc_details["height"] if desc_details["is_present"] else 0
+                    example_box_start_y = y_pos_item_start + BODY_FONT.get_height() + 5 + desc_total_height + 5 # Name + padding + Description + padding
                     
                     # Check if example box itself is visible before drawing
                     if example_box_start_y < self.command_area_bottom_limit:
@@ -441,55 +512,70 @@ class CommandList:
         
         return clickable_areas
 
-def draw_manual(surface: pygame.Surface, discovered: Set[str], mouse_pos: Tuple[int, int] | None) -> List[Tuple[pygame.Rect, str]]:
+def draw_manual(surface: pygame.Surface, discovered: Set[str], mouse_pos: Tuple[int, int] | None, command_list_ref: CommandList) -> List[Tuple[pygame.Rect, str]]:
     """Draw the manual with the expandable command list."""
-    command_list = CommandList(discovered)
-    return command_list.draw(surface, mouse_pos)
+    # command_list = CommandList(discovered) # Instance is now managed in main loop
+    return command_list_ref.draw(surface, mouse_pos)
 
 def main():
     """Test function to display the manual."""
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Command Manual")
+    clock = pygame.time.Clock()
+
+    # Example: Discovered commands (replace with actual game logic)
+    discovered_commands = {"ls", "pwd", "cd", "exit", "cat", "help", "clear", "ps"} 
     
-    # Set of discovered commands for testing
-    discovered = {"ls", "pwd", "cd", "exit", "cat", "help", "rm", "clear", "ps", "kill", "df"}
-    
-    # Create command list
-    command_list = CommandList(discovered)
-    
+    command_list = CommandList(discovered_commands) # Create instance here
+
     running = True
     while running:
         mouse_pos = pygame.mouse.get_pos()
-
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_UP:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1: # Left click
+                    clickable_areas_drawn = command_list.draw(screen, mouse_pos) # Get current clickable areas
+                    for rect, action in clickable_areas_drawn:
+                        if rect.collidepoint(event.pos):
+                            if action == "scroll_up":
+                                command_list.scroll(-1)
+                                command_list.set_button_feedback("scroll_up", True)
+                            elif action == "scroll_down":
+                                command_list.scroll(1)
+                                command_list.set_button_feedback("scroll_down", True)
+                            else: # It's a command
+                                command_list.toggle_command(action)
+                            break 
+                elif event.button == 4:  # Scroll wheel up
                     command_list.scroll(-1)
+                    command_list.set_button_feedback("scroll_up", True)
+                elif event.button == 5:  # Scroll wheel down
+                    command_list.scroll(1)
+                    command_list.set_button_feedback("scroll_down", True)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    command_list.scroll(-1)
+                    command_list.set_button_feedback("scroll_up", True)
                 elif event.key == pygame.K_DOWN:
                     command_list.scroll(1)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left mouse button
-                    # Get clickable areas
-                    clickable_areas = command_list.draw(screen, mouse_pos)
-                    
-                    # Check if click is on a command
-                    for rect, cmd in clickable_areas:
-                        if rect.collidepoint(event.pos):
-                            if cmd == "scroll_up":
-                                command_list.scroll(-1)
-                            elif cmd == "scroll_down":
-                                command_list.scroll(1)
-                            else:
-                                command_list.toggle_command(cmd)
-        
-        # Draw the manual
-        command_list.draw(screen, mouse_pos)
+                    command_list.set_button_feedback("scroll_down", True)
+                elif event.key == pygame.K_ESCAPE:
+                    running = False # Allow exiting with ESC
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_UP:
+                    command_list.set_button_feedback("scroll_up", False)
+                elif event.key == pygame.K_DOWN:
+                    command_list.set_button_feedback("scroll_down", False)
+
+
+        screen.fill(BACKGROUND_COLOR)
+        clickable_areas = draw_manual(screen, discovered_commands, mouse_pos, command_list)
         pygame.display.flip()
-        
+        clock.tick(30)
+
     pygame.quit()
 
 if __name__ == "__main__":
