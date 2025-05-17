@@ -1,228 +1,473 @@
 from enum import Enum
-from game.system.path import Path
+from game.system.path import FSPath # Import FSPath
+
+class Result:
+    def __init__(self, success: bool, value=None, error: str | None = None):
+        self.success: bool = success
+        self.value = value
+        self.error: str | None = error
+        
+    @classmethod
+    def ok(cls, value=None) -> 'Result':
+        return cls(True, value=value)
+        
+    @classmethod
+    def err(cls, error: str) -> 'Result':
+        return cls(False, error=error)
+
+    def __repr__(self) -> str:
+        if self.success:
+            return f"Result.ok(value={self.value})"
+        return f"Result.err(error='{self.error}')"
 
 class Node:
-    def __init__(self, name: str, parent = None, password: str | None = None):
+    def __init__(self, name: str, parent: 'Directory | None' = None, password: str | None = None):
         self.name: str = name
-        self.parent: Node | None = parent
+        self.parent: Directory | None = parent
         self.password: str | None = password
+
+    def get_path(self) -> str:
+        if self.parent is None: # Should be root
+            return "/" if self.name == "" or self.name == "root" else f"/{self.name}" # Special handling for root
+        
+        # Handle root's name potentially being empty or "root"
+        parent_path = self.parent.get_path()
+        if parent_path == "/":
+            return f"/{self.name}"
+        return f"{parent_path}/{self.name}"
     
-    def add_child(self, child):
-        child.parent = self
-        self.children.append(child)
+    def accept(self, visitor: 'FSVisitor'):
+        # To be implemented by subclasses
+        raise NotImplementedError
+
 
 class Directory(Node):
-    def __init__(self, name: str, parent = None, children: list[Node] = [], password: str | None = None):
+    def __init__(self, name: str, parent: 'Directory | None' = None, children: list[Node] | None = None, password: str | None = None):
         super().__init__(name, parent, password)
-        self.children: list[Node] = children
+        self.children: list[Node] = children if children is not None else []
+
+    def find_child(self, name: str) -> Node | None:
+        for child in self.children:
+            if child.name == name:
+                return child
+        return None
+
+    def add_child(self, node: Node) -> bool:
+        if self.find_child(node.name):
+            return False # Child with same name already exists
+        node.parent = self
+        self.children.append(node)
+        return True
+
+    def remove_child(self, name: str) -> bool:
+        child_to_remove = self.find_child(name)
+        if child_to_remove:
+            self.children.remove(child_to_remove)
+            child_to_remove.parent = None
+            return True
+        return False
+    
+    def accept(self, visitor: 'FSVisitor'):
+        visitor.visit_directory(self)
+
 
 class File(Node):
-    def __init__(self, name: str, parent = None, contents: str = "", password: str | None = None):
+    def __init__(self, name: str, parent: 'Directory | None' = None, contents: str = "", password: str | None = None):
         super().__init__(name, parent, password)
-        self.contents = contents
+        self.contents: str = contents
+    
+    def accept(self, visitor: 'FSVisitor'):
+        visitor.visit_file(self)
+
 
 class FileSystem:
-    def __init__(self, root: Directory):
-        self.root = root
-    
-    def copy_path(self, in_path, out_path):
+    def __init__(self, root_password: str | None = None):
+        # The root directory's name is effectively empty for path purposes,
+        # or could be considered "root" internally if needed for the Node object itself.
+        # FSPath("/") will have an empty `name` and empty `components`.
+        self.root: Directory = Directory("", parent=None, password=root_password) # Root node's name is empty for path logic
+
+    def _resolve_path(self, path_str: str, create_parents: bool = False, must_be_dir: bool | None = None, target_must_exist: bool = True) -> Result:
         """
-        Copy a node from in_path to out_path.
-        
-        Parameters:
-        - in_path: Path or str - Path to the source node
-        - out_path: Path or str - Path to the destination directory
-        
-        Returns:
-        - bool: True if successful, False otherwise
+        Resolves a path string to a Node.
+        path_str: The string representation of the path.
+        create_parents: If True, creates missing parent directories.
+        must_be_dir: If True, the resolved node must be a Directory. If False, must be a File. If None, can be either.
+        target_must_exist: If True, the final component of the path must exist. If False, resolves to the parent of the final component.
         """
-        # Convert path strings to strings if they're Path objects
-        in_path_str = in_path.path if hasattr(in_path, 'path') else in_path
-        out_path_str = out_path.path if hasattr(out_path, 'path') else out_path
-        
-        in_node = self.get_node(in_path_str)
-        if in_node is None:
-            return False
-        
-        out_node = self.get_node(out_path_str)
-        if out_node is None:
-            return False
-        
-        if not isinstance(out_node, Directory):
-            return False
-        
-        # Create a copy of the node instead of reusing the same reference
-        if isinstance(in_node, File):
-            # Always create a new node with the original name (not replacing)
-            new_node = File(in_node.name, out_node, in_node.contents, in_node.password)
-            out_node.children.append(new_node)
-        elif isinstance(in_node, Directory):
-            # Create a new directory with same properties
-            new_node = Directory(in_node.name, out_node, [], in_node.password)
-            out_node.children.append(new_node)
-            
-            # Recursively copy all children
-            for child in in_node.children:
-                if isinstance(child, File):
-                    child_copy = File(child.name, new_node, child.contents, child.password)
-                    new_node.children.append(child_copy)
-                elif isinstance(child, Directory):
-                    # For directories, we need to handle them recursively
-                    self._copy_directory(child, new_node)
-        
-        return True
-        
-    def _copy_directory(self, src_dir: Directory, dst_parent: Directory):
-        """Helper method to recursively copy directory contents"""
-        # Create new directory node
-        new_dir = Directory(src_dir.name, dst_parent, [], src_dir.password)
-        
-        # Check if a directory with the same name already exists
-        existing_dir_index = None
-        for i, child in enumerate(dst_parent.children):
-            if child.name == new_dir.name:
-                existing_dir_index = i
-                break
-        
-        if existing_dir_index is not None:
-            # Replace existing directory
-            dst_parent.children[existing_dir_index] = new_dir
-        else:
-            # Add as new directory
-            dst_parent.children.append(new_dir)
-        
-        # Copy all children
-        for child in src_dir.children:
-            if isinstance(child, File):
-                file_copy = File(child.name, new_dir, child.contents, child.password)
-                
-                # Check if a file with the same name already exists
-                existing_file_index = None
-                for i, existing_child in enumerate(new_dir.children):
-                    if existing_child.name == file_copy.name:
-                        existing_file_index = i
-                        break
-                
-                if existing_file_index is not None:
-                    # Replace existing file
-                    new_dir.children[existing_file_index] = file_copy
-                else:
-                    # Add as new file
-                    new_dir.children.append(file_copy)
-            elif isinstance(child, Directory):
-                self._copy_directory(child, new_dir)
+        if not path_str:
+            return Result.err("Path cannot be empty.")
 
-    def get_node(self, path: Path) -> Node | None:
-        if not path: # Handles empty string path
-            return None
-
-        if path == "/":
-            return self.root
+        fspath = FSPath(path_str)
         
-        # Filters out empty strings from multiple slashes e.g. "/foo//bar" -> ["foo", "bar"]
-        # or leading/trailing slashes for non-root paths e.g. "/foo/" -> ["foo"]
-        parts = [part for part in path.split('/') if part]
+        current_node: Node = self.root
 
-        # If after stripping and splitting, parts is empty, but path wasn't just "/", it's invalid (e.g. "///")
-        if not parts and path != "/":
-             return None
+        components_to_traverse = fspath.components
+        if not target_must_exist: # If we are creating the target, we resolve to its would-be parent
+            if not components_to_traverse: # e.g. creating "/foo" from "/", target is foo, parent is root
+                 if fspath.is_root(): # Trying to "create" root?
+                     return Result.err("Cannot get parent of root to create it.")
+                 # This case means we are trying to create something directly under root.
+                 # The loop below will be skipped, current_node remains self.root.
+            else:
+                components_to_traverse = fspath.components[:-1]
 
-        current_node = self.root
-        for part in parts:
+
+        for i, component_name in enumerate(components_to_traverse):
             if not isinstance(current_node, Directory):
-                # Current segment is not a directory, so cannot traverse further.
-                return None
-
-            found_child_node = None
-            for child in current_node.children:
-                if child.name == part:
-                    found_child_node = child
-                    break
+                return Result.err(f"Path component '{component_name}' in '{fspath}' is not a directory.")
             
-            if found_child_node is not None:
-                current_node = found_child_node
-            else:
-                # Path component (part) not found in current_node's children.
-                return None
-        
-        return current_node
-    
-    def create_node(self, full_path: str, node_instance: Node) -> Node | None:
-        # node_instance is the File or Directory object to insert.
-        # Its .name will be set based on the last component of full_path.
-        # Its .parent will be set to the resolved parent directory from full_path.
-
-        normalized_full_path = full_path.strip()
-        if not normalized_full_path or normalized_full_path == "/":
-            # Cannot create at root this way, or an invalid empty path.
-            return None 
-
-        path_parts = [p for p in normalized_full_path.split('/') if p]
-        if not path_parts: # e.g. path was "///" or similar, resulting in no valid parts
-            return None
-
-        new_node_name = path_parts[-1]
-        parent_path_segments = path_parts[:-1]
-
-        # Traverse to find the parent directory
-        parent_dir_node = self.root
-        for segment_name in parent_path_segments:
-            if not isinstance(parent_dir_node, Directory):
-                # A segment of the parent path is a file, or path is malformed.
-                return None
-
-            found_next_dir_segment = None
-            for child_node in parent_dir_node.children:
-                if child_node.name == segment_name:
-                    if isinstance(child_node, Directory):
-                        found_next_dir_segment = child_node
-                        break
-                    else: 
-                        # A segment of the parent path is a file.
-                        return None 
+            next_node = current_node.find_child(component_name)
             
-            if found_next_dir_segment is not None:
-                parent_dir_node = found_next_dir_segment
+            if next_node is None:
+                if create_parents and target_must_exist: # Only create parents if resolving target that should exist
+                    new_dir = Directory(component_name, current_node)
+                    current_node.add_child(new_dir)
+                    current_node = new_dir
+                elif create_parents and not target_must_exist and i < len(fspath.components) -1 : # creating parents for a new node
+                    new_dir = Directory(component_name, current_node)
+                    current_node.add_child(new_dir)
+                    current_node = new_dir
+                else:
+                    return Result.err(f"Path component '{component_name}' not found in '{fspath}'.")
             else:
-                # Intermediate directory in the parent path does not exist.
-                return None
+                current_node = next_node
+
+        # After loop, current_node is the parent if !target_must_exist, or the target itself if target_must_exist
+        if target_must_exist:
+            resolved_node = current_node
+            # If fspath.components is empty, it means fspath was root.
+            # The loop is skipped, current_node is self.root.
+            if not fspath.components and fspath.is_root():
+                 resolved_node = self.root
+            elif fspath.components and resolved_node.name != fspath.name() and resolved_node == self.root:
+                # This can happen if path is like "/file" and root has no children
+                # or if path is just "file" (relative) and we are at root
+                # We need to find the actual child if it exists
+                final_target = self.root.find_child(fspath.name())
+                if final_target:
+                    resolved_node = final_target
+                else:
+                    return Result.err(f"Path '{fspath}' not found.")
+
+
+        else: # We resolved the parent for a new node
+            resolved_node = current_node # This is the parent directory
+
+        # Type checking for the final resolved node (if target_must_exist)
+        if target_must_exist:
+            if must_be_dir is True and not isinstance(resolved_node, Directory):
+                return Result.err(f"Path '{fspath}' exists but is not a directory.")
+            if must_be_dir is False and not isinstance(resolved_node, File):
+                return Result.err(f"Path '{fspath}' exists but is not a file.")
         
-        # parent_dir_node is now the directory where the new node should be created.
-        # Ensure it's actually a Directory (should be, due to logic above).
-        if not isinstance(parent_dir_node, Directory):
-             return None 
+        return Result.ok(resolved_node)
 
-        # Check if a node with new_node_name already exists in the parent directory
-        for existing_child in parent_dir_node.children:
-            if existing_child.name == new_node_name:
-                # Node with the same name already exists at the target path.
-                return None
-
-        # Configure the provided node_instance
-        node_instance.name = new_node_name
-        node_instance.parent = parent_dir_node
+    def read_file(self, path_str: str) -> Result:
+        resolve_result = self._resolve_path(path_str, must_be_dir=False, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
         
-        # If the node_instance is a Directory, ensure its children list is initialized.
-        # For a new directory, this list should typically be empty.
-        # The caller should provide a Directory instance with children=[] if that's intended.
-        if isinstance(node_instance, Directory):
-            if node_instance.children is None: # Defensive check
-                node_instance.children = []
+        file_node = resolve_result.value
+        if not isinstance(file_node, File): # Should be caught by must_be_dir=False
+             return Result.err(f"Path '{path_str}' is not a file.")
+        return Result.ok(file_node.contents)
 
-        parent_dir_node.children.append(node_instance)
-        return node_instance
+    def write_file(self, path_str: str, contents: str, create_parents: bool = False, password: str | None = None) -> Result:
+        fspath = FSPath(path_str)
+        if fspath.is_root():
+            return Result.err("Cannot write to root path directly as a file.")
+        
+        file_name = fspath.name()
+        parent_path_str = str(fspath.parent())
 
-    def create_file(self, path: str, contents: str = "") -> Node | None:
-        file_node = File(path.split("/")[-1], None, contents)
-        return self.create_node(path, file_node)
-    
-    def create_directory(self, path: str) -> Node | None:
-        dir_node = Directory(path.split("/")[-1], None)
-        return self.create_node(path, dir_node)
+        # Resolve parent directory, creating if necessary
+        parent_resolve_result = self._resolve_path(parent_path_str, create_parents=create_parents, must_be_dir=True, target_must_exist=True)
+        if not parent_resolve_result.success:
+            return parent_resolve_result
+        
+        parent_dir = parent_resolve_result.value
+        if not isinstance(parent_dir, Directory): # Should be caught by must_be_dir=True
+             return Result.err(f"Parent path for '{path_str}' is not a directory.")
 
-    def delete_node(self, path: str) -> bool:
-        node = self.get_node(path)
-        if node is None:
-            return False
-        node.parent.children = [child for child in node.parent.children if child.name != node.name]
-        return True
+        existing_node = parent_dir.find_child(file_name)
+        if existing_node:
+            if isinstance(existing_node, File):
+                existing_node.contents = contents
+                return Result.ok(existing_node)
+            else:
+                return Result.err(f"Path '{path_str}' already exists and is a directory.")
+        else:
+            new_file = File(name=file_name, parent=parent_dir, contents=contents, password=password)
+            parent_dir.add_child(new_file)
+            return Result.ok(new_file)
+
+    def mkdir(self, path_str: str, create_parents: bool = False, password: str | None = None) -> Result:
+        fspath = FSPath(path_str)
+        if fspath.is_root():
+            return Result.ok(self.root) # Making root directory is idempotent
+
+        dir_name = fspath.name()
+        parent_path_str = str(fspath.parent())
+
+        # Resolve parent directory
+        parent_resolve_result = self._resolve_path(parent_path_str, create_parents=create_parents, must_be_dir=True, target_must_exist=True)
+        if not parent_resolve_result.success:
+            # This error occurs if create_parents is False and parent doesn't exist,
+            # or if a component of the parent path is a file.
+            return parent_resolve_result
+        
+        parent_dir = parent_resolve_result.value
+        if not isinstance(parent_dir, Directory):
+             return Result.err(f"Could not find or create parent directory for '{path_str}'. Path component is not a directory.")
+
+
+        existing_node = parent_dir.find_child(dir_name)
+        if existing_node:
+            if isinstance(existing_node, Directory):
+                return Result.ok(existing_node) # Directory already exists
+            else:
+                return Result.err(f"Path '{path_str}' already exists and is a file.")
+        else:
+            new_dir = Directory(name=dir_name, parent=parent_dir, password=password)
+            parent_dir.add_child(new_dir)
+            return Result.ok(new_dir)
+
+    def exists(self, path_str: str) -> bool:
+        return self._resolve_path(path_str, target_must_exist=True).success
+
+    def is_file(self, path_str: str) -> bool:
+        resolve_result = self._resolve_path(path_str, must_be_dir=False, target_must_exist=True)
+        return resolve_result.success and isinstance(resolve_result.value, File)
+
+    def is_dir(self, path_str: str) -> bool:
+        resolve_result = self._resolve_path(path_str, must_be_dir=True, target_must_exist=True)
+        return resolve_result.success and isinstance(resolve_result.value, Directory)
+
+    def list_dir(self, path_str: str) -> Result:
+        resolve_result = self._resolve_path(path_str, must_be_dir=True, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        
+        dir_node = resolve_result.value
+        if not isinstance(dir_node, Directory): # Should be caught by must_be_dir=True
+             return Result.err(f"Path '{path_str}' is not a directory.")
+        return Result.ok([child.name for child in dir_node.children])
+
+    def get_directory_details(self, path_str: str) -> Result:
+        resolve_result = self._resolve_path(path_str, must_be_dir=True, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        
+        dir_node = resolve_result.value
+        # Ensured by must_be_dir=True in _resolve_path, but double check for safety
+        if not isinstance(dir_node, Directory):
+            return Result.err(f"Path '{path_str}' is not a directory.")
+            
+        return Result.ok({'password': dir_node.password})
+
+    def _deep_copy_node(self, node: Node, new_parent: Directory) -> Node:
+        if isinstance(node, File):
+            return File(name=node.name, parent=new_parent, contents=node.contents, password=node.password)
+        elif isinstance(node, Directory):
+            new_dir = Directory(name=node.name, parent=new_parent, children=[], password=node.password)
+            for child in node.children:
+                copied_child = self._deep_copy_node(child, new_dir)
+                new_dir.children.append(copied_child) # Directly append, parent set in _deep_copy_node
+            return new_dir
+        raise TypeError("Unknown node type")
+
+
+    def copy(self, src_path_str: str, dst_path_str: str) -> Result:
+        src_resolve_result = self._resolve_path(src_path_str, target_must_exist=True)
+        if not src_resolve_result.success:
+            return Result.err(f"Source path '{src_path_str}' not found. Error: {src_resolve_result.error}")
+        src_node = src_resolve_result.value
+
+        dst_fspath = FSPath(dst_path_str)
+        
+        # Determine the actual destination parent directory and the name for the new node
+        dst_parent_path_str: str
+        new_node_name: str
+
+        # Try to resolve dst_path_str as a directory first.
+        # If it resolves to a directory, that's our target parent. New node keeps its original name.
+        dst_as_dir_resolve = self._resolve_path(dst_path_str, must_be_dir=True, create_parents=False, target_must_exist=True)
+
+        if dst_as_dir_resolve.success: # Destination is an existing directory
+            dst_parent_dir = dst_as_dir_resolve.value
+            new_node_name = src_node.name # Copy into this directory with original name
+        else:
+            # Destination is not an existing directory.
+            # It could be a new name in an existing directory, or needs parent creation.
+            dst_parent_fspath = dst_fspath.parent()
+            new_node_name = dst_fspath.name()
+            
+            # Resolve the parent of the destination path
+            dst_parent_resolve_result = self._resolve_path(str(dst_parent_fspath), create_parents=True, must_be_dir=True, target_must_exist=True)
+            if not dst_parent_resolve_result.success:
+                return Result.err(f"Could not resolve or create destination parent directory '{dst_parent_fspath}'. Error: {dst_parent_resolve_result.error}")
+            dst_parent_dir = dst_parent_resolve_result.value
+
+        if not isinstance(dst_parent_dir, Directory):
+             return Result.err(f"Destination parent '{dst_parent_dir.get_path()}' is not a directory.")
+
+
+        if dst_parent_dir.find_child(new_node_name):
+            return Result.err(f"Destination path '{dst_parent_dir.get_path()}/{new_node_name}' already exists.")
+
+        # Ensure src is not an ancestor of dst_parent_dir if src is a directory (to prevent recursive copy into self)
+        if isinstance(src_node, Directory):
+            temp_parent = dst_parent_dir
+            while temp_parent is not None:
+                if temp_parent == src_node:
+                    return Result.err("Cannot copy a directory into itself or one of its subdirectories.")
+                # Check if temp_parent.parent is None, which means it's the root's direct child or the root itself.
+                # The root node in this implementation has parent=None.
+                if temp_parent.parent is None and temp_parent != self.root : # Should not happen if structure is correct
+                    break 
+                if temp_parent == self.root and src_node != self.root: # temp_parent is root, check if src_node is also root
+                     break # Reached root, src_node is not an ancestor
+                if temp_parent == self.root and src_node == self.root: # Copying root into a subdir of root
+                    return Result.err("Cannot copy a directory into itself or one of its subdirectories.")
+
+                temp_parent = temp_parent.parent
+
+
+        copied_node = self._deep_copy_node(src_node, dst_parent_dir)
+        copied_node.name = new_node_name # Ensure the copied node has the correct target name
+        
+        # Detach the copied_node from the parent it was assigned during _deep_copy_node
+        # as add_child will re-establish this relationship.
+        # This is a bit of a workaround for _deep_copy_node setting parent.
+        # A cleaner way would be for _deep_copy_node not to set parent,
+        # and let the caller (copy method) do it.
+        copied_node.parent = None # Temporarily detach for add_child to work cleanly
+
+        if dst_parent_dir.add_child(copied_node):
+            return Result.ok(copied_node)
+        else:
+            # This should ideally not happen if the previous check for existence was correct.
+            return Result.err(f"Failed to add copied node to destination '{dst_parent_dir.get_path()}'. A node with name '{new_node_name}' might have been created concurrently or check logic error.")
+
+
+    def move(self, src_path_str: str, dst_path_str: str) -> Result:
+        src_resolve_result = self._resolve_path(src_path_str, target_must_exist=True)
+        if not src_resolve_result.success:
+            return Result.err(f"Source path '{src_path_str}' not found. Error: {src_resolve_result.error}")
+        src_node = src_resolve_result.value
+        
+        if src_node == self.root:
+            return Result.err("Cannot move the root directory.")
+
+        original_parent = src_node.parent
+        if not original_parent: # Should not happen for non-root nodes
+            return Result.err(f"Source node '{src_path_str}' has no parent, cannot move.")
+
+        dst_fspath = FSPath(dst_path_str)
+        
+        # Determine the actual destination parent directory and the name for the new node
+        dst_parent_path_str: str
+        new_node_name: str
+
+        dst_as_dir_resolve = self._resolve_path(dst_path_str, must_be_dir=True, create_parents=False, target_must_exist=True)
+
+        if dst_as_dir_resolve.success: # Destination is an existing directory
+            dst_parent_dir = dst_as_dir_resolve.value
+            new_node_name = src_node.name 
+        else:
+            # Destination is not an existing directory.
+            dst_parent_fspath = dst_fspath.parent()
+            new_node_name = dst_fspath.name()
+            
+            dst_parent_resolve_result = self._resolve_path(str(dst_parent_fspath), create_parents=False, must_be_dir=True, target_must_exist=True) # No create_parents for move dest parent
+            if not dst_parent_resolve_result.success:
+                return Result.err(f"Destination parent directory '{dst_parent_fspath}' does not exist. Error: {dst_parent_resolve_result.error}")
+            dst_parent_dir = dst_parent_resolve_result.value
+        
+        if not isinstance(dst_parent_dir, Directory):
+             return Result.err(f"Destination parent '{dst_parent_dir.get_path()}' is not a directory.")
+
+        if dst_parent_dir.find_child(new_node_name):
+            return Result.err(f"Destination path '{dst_parent_dir.get_path()}/{new_node_name}' already exists.")
+
+        # Prevent moving a directory into itself or a subdirectory
+        if isinstance(src_node, Directory):
+            temp_parent = dst_parent_dir
+            while temp_parent is not None:
+                if temp_parent == src_node:
+                    return Result.err("Cannot move a directory into itself or one of its subdirectories.")
+                if temp_parent.parent is None and temp_parent != self.root: break
+                if temp_parent == self.root: break
+                temp_parent = temp_parent.parent
+        
+        # Perform the move
+        if not original_parent.remove_child(src_node.name):
+             return Result.err(f"Failed to remove source node '{src_node.name}' from original parent '{original_parent.get_path()}'. This indicates an internal inconsistency.") # Should not happen
+
+        src_node.name = new_node_name # Update name if dst_path_str implies a rename
+        # src_node.parent will be set by add_child
+        if dst_parent_dir.add_child(src_node):
+            return Result.ok(src_node)
+        else:
+            # Rollback: try to add it back to original parent if adding to new parent failed
+            # This is a simplified rollback, a more robust one might be needed for complex scenarios.
+            src_node.name = original_parent.find_child(src_node.name) # Revert name if it was changed for new dest
+            original_parent.add_child(src_node)
+            return Result.err(f"Failed to add node to destination '{dst_parent_dir.get_path()}'. Move operation failed and attempted to rollback.")
+
+
+    def delete(self, path_str: str, recursive: bool = False) -> Result:
+        resolve_result = self._resolve_path(path_str, target_must_exist=True)
+        if not resolve_result.success:
+            return resolve_result
+        
+        node_to_delete = resolve_result.value
+
+        if node_to_delete == self.root:
+            return Result.err("Cannot delete the root directory.")
+            
+        if node_to_delete.parent is None: # Should only be root, caught above
+            return Result.err(f"Node '{path_str}' has no parent. Cannot delete.")
+
+        parent_dir = node_to_delete.parent
+        
+        if isinstance(node_to_delete, Directory):
+            if node_to_delete.children and not recursive:
+                return Result.err(f"Directory '{path_str}' is not empty. Use recursive=True to delete.")
+        
+        if parent_dir.remove_child(node_to_delete.name):
+            return Result.ok()
+        else:
+            # This case should ideally not be reached if resolve_path and find_child work correctly.
+            return Result.err(f"Failed to delete node '{path_str}'. Node not found in parent's children list.")
+
+class FSVisitor:
+    def visit_file(self, file_node: File):
+        pass
+        
+    def visit_directory(self, directory_node: Directory):
+        pass
+
+# Example Visitor
+class PrintVisitor(FSVisitor):
+    def __init__(self, indent_char: str = "  "):
+        self.current_indent = ""
+        self.indent_char = indent_char
+
+    def visit_file(self, file_node: File):
+        print(f"{self.current_indent}File: {file_node.name} (Path: {file_node.get_path()})")
+        
+    def visit_directory(self, directory_node: Directory):
+        print(f"{self.current_indent}Dir: {directory_node.name} (Path: {directory_node.get_path()})")
+        
+        original_indent = self.current_indent
+        self.current_indent += self.indent_char
+        for child in directory_node.children:
+            child.accept(self) # Polymorphic call to accept
+        self.current_indent = original_indent
+
+# Old FileSystem methods to be removed or adapted:
+# copy_path, _copy_directory, get_node (replaced by _resolve_path), create_node, create_file, create_directory, delete_node
+# The old methods were removed by replacing the entire FileSystem class.
+# The original Node, Directory, File classes have been modified at the top.

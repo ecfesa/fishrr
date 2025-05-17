@@ -1,12 +1,11 @@
-from game.system.filesystem import FileSystem, Node, Directory, File
+from game.system.filesystem import FileSystem, Directory, File
 from game.system.shell import Shell
 from game.system.terminal import Terminal
-from game.system.path import Path
-from game.system.game_files import GAME_ROOT
+from game.system.game_files import fs as game_fs_instance
 
 class System:
     def __init__(self, size_x: int, size_y: int):
-        self.filesystem = FileSystem(GAME_ROOT)
+        self.filesystem: FileSystem = game_fs_instance
         self.terminal = Terminal(size_x, size_y)
         self.shell = Shell(self.terminal)
         self.shell.register_cmd("ls", self.ls)
@@ -31,394 +30,271 @@ class System:
 
     def _resolve_path(self, path_str: str) -> str:
         """
-        Resolves a given path string to an absolute path, handling CWD
-        and cleaning up redundant slashes like '//' or trailing '/'.
-        This method resolves '.' and '..'.
-    
-        Assumes path_str is not empty, as callers should check first.
+        Resolves a given path string (potentially relative) to an absolute path string
+        from the perspective of the filesystem's root, using the current shell.cwd.
+        Handles '.', '..', and normalizes slashes.
         """
-        
+        if not path_str: # Handle empty path_str, e.g. "cd " vs "cd"
+            path_str = "." 
+
         full_path: str
         if path_str.startswith('/'):
             full_path = path_str
         else:
             # Relative path
             if self.shell.cwd == '/':
-                full_path = '/' + path_str # Avoids '//file'
+                full_path = '/' + path_str
             else:
-                full_path = self.shell.cwd + '/' + path_str # e.g., "/home" + "/" + "file"
+                # Ensure no trailing slash on cwd before appending, unless cwd is just "/"
+                cwd_normalized = self.shell.cwd.rstrip('/') if self.shell.cwd != '/' else '/'
+                full_path = (cwd_normalized or '/') + '/' + path_str
+
 
         # Normalize the path:
         # Split by '/', filter out empty components (this handles multiple slashes),
         # then rejoin with single slashes, and ensure it starts with a single '/'.
+        
+        # Pre-normalize to handle cases like "///" or "/foo//"
+        if '//' in full_path:
+            import re
+            full_path = re.sub(r'/+', '/', full_path)
+
+        # Special case: if full_path became empty or just slashes after stripping, it's root.
+        if not full_path.strip('/'):
+            return "/"
+
         components = [comp for comp in full_path.split('/') if comp]
         
-        # Resolve '.' and '..'
         resolved_components = []
         for component in components:
             if component == '.':
                 continue
             elif component == '..':
-                if resolved_components: # Check if there's a component to pop
+                if resolved_components:
                     resolved_components.pop()
             else:
                 resolved_components.append(component)
 
         if not resolved_components:
-            # This means the path was effectively root (e.g., input "/", "///", or resolved to it).
             return "/" 
         
-        # Reconstruct with a leading slash and single slashes between components.
         normalized_path = "/" + "/".join(resolved_components)
         
         return normalized_path
 
     def touch(self, user_path: str = "", *args, **kwargs):
         if not user_path:
-            self.terminal.print("Error: path is required.\n")
+            self.terminal.print("touch: missing file operand")
             return
 
         resolved_path = self._resolve_path(user_path)
-        self.filesystem.create_file(resolved_path)
-        self.terminal.print(f"Created file: {resolved_path}\n")
+        # Attempt to write an empty file. If it exists as a dir, write_file will fail.
+        # If it exists as a file, its content will be set to empty (classic touch doesn't truncate, but this is fine).
+        result = self.filesystem.write_file(resolved_path, "", create_parents=False) # create_parents=False for touch
+
+        if not result.success:
+            # If it's because it's a directory, write_file error will say so.
+            # If it's because parent path doesn't exist, it will also error out.
+            # 'touch' usually updates timestamps. Here, we ensure a file exists.
+            # If the error is "path already exists and is a directory", that's not what touch does.
+            # Let's check if it exists as a file. If so, it's a success for "touch" (timestamp update)
+            if self.filesystem.is_file(resolved_path):
+                # self.terminal.print(f"Updated timestamp for: {resolved_path}\n") # No actual timestamp
+                pass # It's fine, file exists
+            else:
+                self.terminal.print(f"touch: cannot touch '{user_path}': {result.error}\n")
+
 
     def cat(self, user_path: str = "", *args, **kwargs):
         if not user_path:
-            self.terminal.print("Error: path is required.\n")
+            self.terminal.print("cat: missing file operand")
             return
         
         resolved_path = self._resolve_path(user_path)
-        node = self.filesystem.get_node(resolved_path)
-        if node is None:
-            self.terminal.print("Error: path does not exist.\n")
-            return
-        
-        if isinstance(node, File):
-            if node.contents == "":
-                self.terminal.print("< file is empty >\n")
+        result = self.filesystem.read_file(resolved_path)
+
+        if result.success:
+            if result.value == "":
+                # self.terminal.print("< file is empty >") # Consistent with typical cat
+                pass # cat on empty file produces no output
             else:
-                self.terminal.print(node.contents + "\n")
+                self.terminal.print(result.value + ("" if result.value.endswith("\n") else "\n"))
         else:
-            self.terminal.print("Error: path is not a file.\n")
+            self.terminal.print(f"cat: {user_path}: {result.error}")
 
     def mkdir(self, user_path: str = "", *args, **kwargs):
         if not user_path:
-            self.terminal.print("Error: path is required.\n")
+            self.terminal.print("mkdir: missing operand")
             return
         
         resolved_path = self._resolve_path(user_path)
+        result = self.filesystem.mkdir(resolved_path, create_parents=False) # Standard mkdir doesn't create parents by default
 
-        # Check if path already exists
-        if self.filesystem.get_node(resolved_path) is not None:
-            self.terminal.print("Error: path already exists.\n")
-            return
+        if not result.success:
+            self.terminal.print(f"mkdir: cannot create directory '{user_path}': {result.error}\n")
+        # else:
+            # self.terminal.print(f"Created directory: {resolved_path}") # No output on success for mkdir usually
 
-        self.filesystem.create_directory(resolved_path)
-        self.terminal.print(f"Created directory: {resolved_path}\n")
-
-    def rm(self, user_path: str = "", *args, **kwargs):
+    def rm(self, user_path: str = "", *args, **kwargs): # Add -r later
         if not user_path:
-            self.terminal.print("Error: path is required.\n")
+            self.terminal.print("rm: missing operand")
             return
 
         resolved_path = self._resolve_path(user_path)
 
         if resolved_path == "/":
-            self.terminal.print("Error: cannot delete root directory.\n")
+            self.terminal.print("rm: cannot remove root directory '/'")
             return
         
-        if not self.filesystem.delete_node(resolved_path):
-            self.terminal.print("Error: path does not exist.\n")
-        else:
-            self.terminal.print(f"Deleted: {resolved_path}\n")
+        # For 'rm' on a directory, it should fail if not empty, unless -r is specified.
+        # The `delete` method's `recursive` flag handles this.
+        # We need to know if it's a directory to decide on the recursive flag.
+        is_dir = self.filesystem.is_dir(resolved_path)
+        
+        # Default to non-recursive for files, and non-recursive for dirs (will fail if not empty)
+        # This matches standard 'rm' behavior without flags.
+        result = self.filesystem.delete(resolved_path, recursive=False) 
 
-    def ls(self, *args, **kwargs):
-        out = ""
-        node = self.filesystem.get_node(self.shell.cwd)
-        if isinstance(node, Directory):
-            children = node.children
-            for child in children:
-                if isinstance(child, Directory):
-                    out += "[D] " + child.name + "\n"
-                elif isinstance(child, File):
-                    out += "[F] " + child.name + "\n"
-        elif node is None:
-            out = "Error: current directory not found.\n"
-        else:
-            out = "Error: current path is not a directory.\n"
-        if out != "":
-            self.terminal.print(out)
-        else:
-            self.terminal.print("< directory is empty >\n")
+        if not result.success:
+            self.terminal.print(f"rm: cannot remove '{user_path}': {result.error}\n")
+        # else:
+            # self.terminal.print(f"Deleted: {resolved_path}") # No output on success
+
+    def ls(self, user_ls_path: str = "", *args, **kwargs):
+        target_path_str = self.shell.cwd
+        if user_ls_path:
+            target_path_str = self._resolve_path(user_ls_path)
+
+        list_result = self.filesystem.list_dir(target_path_str)
+
+        if not list_result.success:
+            self.terminal.print(f"ls: cannot access '{user_ls_path or '.'}': {list_result.error}")
+            return
+
+        if not list_result.value: # Empty directory
+            # self.terminal.print("< directory is empty >") # ls on empty dir produces no output
+            return
+
+        out_lines = []
+        for name in sorted(list_result.value): # Sort alphabetically like typical ls
+            # Construct full path for is_dir check
+            # Path components must be joined carefully
+            
+            # Path for checks needs to be absolute from root
+            path_for_check = ""
+            if target_path_str == "/":
+                path_for_check = "/" + name
+            else:
+                path_for_check = target_path_str.rstrip('/') + "/" + name
+            
+            if self.filesystem.is_dir(path_for_check):
+                out_lines.append(f"[D] {name}")
+            else: # If not a dir and it's in list_dir, assume file
+                out_lines.append(f"[F] {name}")
+        
+        if out_lines:
+            self.terminal.print("\n".join(out_lines) + "\n")
+
 
     def cd(self, user_path: str = "/", password: str = "", *args, **kwargs):
-        # An empty user_path (e.g. from `cd ""`) will be resolved to the current directory
-        # by _resolve_path, which is acceptable though not standard for `cd ""`.
-        # `cd` with no args defaults user_path to "/", which is correctly handled.
+        # Handle `cd` (no args) -> go to home, but we don't have a user/home concept yet. Default to root.
+        # current `cd` with no args `user_path` defaults to "/" which is fine.
+        
         resolved_path = self._resolve_path(user_path)
+        
+        # Check if it's a directory first
+        if not self.filesystem.is_dir(resolved_path):
+            if self.filesystem.exists(resolved_path): # It exists but not a dir
+                 self.terminal.print(f"cd: {user_path}: Not a directory\n")
+            else: # It does not exist
+                 self.terminal.print(f"cd: {user_path}: No such file or directory\n")
+            return
 
-        node = self.filesystem.get_node(resolved_path)
-        # Check if path exists
-        if node is None:
-            self.terminal.print("Error: path does not exist.\n")
+        # Get directory details for password checking
+        details_result = self.filesystem.get_directory_details(resolved_path)
+        if not details_result.success: # Should not happen if is_dir was true, but good practice
+            self.terminal.print(f"cd: cannot access '{user_path}': {details_result.error}\n")
             return
         
-        # Check if path is a directory
-        if not isinstance(node, Directory):
-            self.terminal.print("Error: path is not a directory.\n")
-            return
+        dir_password = details_result.value.get('password')
 
-        if node.password is not None and password == "":
-            self.terminal.print("Error: password is required to access this directory.\n")
-            self.terminal.print("Usage: cd <path> <password>\n")
-            return
-
-        if node.password is not None and node.password != password:
-            self.terminal.print("Error: incorrect password.\n")
-            return
+        if dir_password is not None:
+            if password == "":
+                self.terminal.print(f"cd: {user_path}: Password required\n")
+                # self.terminal.print("Usage: cd <path> <password>") # Maybe too verbose
+                return
+            if dir_password != password:
+                self.terminal.print(f"cd: {user_path}: Incorrect password\n")
+                return
         
         self.shell.cwd = resolved_path
+        # No output on successful cd
 
     def pwd(self, *args, **kwargs):
         self.terminal.print(self.shell.cwd + "\n")
     
-    # Not the real tree command. Shows the game map instead.
-    def tree(self, *args, **kwargs):
-        self.terminal.print("Not implemented.\n")
+    def tree(self, *args, **kwargs): # Remains not implemented
+        self.terminal.print("tree: Not implemented.\n")
 
     def cp(self, in_path_str: str = "", out_path_str: str = "", *args, **kwargs):
         if not in_path_str or not out_path_str:
-            self.terminal.print("Error: both source and destination paths are required.\n")
+            self.terminal.print("cp: missing file operand\n") # or "cp: missing destination file operand after..."
             return
 
-        in_path = Path(in_path_str, self.shell.cwd)
-        out_path = Path(out_path_str, self.shell.cwd)
+        resolved_in_path = self._resolve_path(in_path_str)
+        resolved_out_path = self._resolve_path(out_path_str)
 
-        in_node = self.filesystem.get_node(in_path.path)
-        if in_node is None:
-            self.terminal.print(f"Error: source path '{in_path.path}' does not exist.\n")
+        if resolved_in_path == resolved_out_path:
+            self.terminal.print(f"cp: '{in_path_str}' and '{out_path_str}' are the same file\n")
             return
-        
-        out_node = self.filesystem.get_node(out_path.path)
-        
-        # Determine the target path for the copy operation
-        if out_node is None:
-            # Check if the parent directory exists (for creating new file/dir)
-            parent_path = out_path.up().path
-            parent_node = self.filesystem.get_node(parent_path)
+
+        copy_result = self.filesystem.copy(resolved_in_path, resolved_out_path)
+
+        if not copy_result.success:
+            # Provide more specific error messages if possible, based on standard cp behavior
+            # e.g. if source does not exist, or dest parent does not exist.
+            # The filesystem.copy() error messages are quite generic.
             
-            if parent_node is None:
-                self.terminal.print(f"Error: destination directory '{parent_path}' does not exist.\n")
-                return
-                
-            if not isinstance(parent_node, Directory):
-                self.terminal.print(f"Error: destination '{parent_path}' is not a directory.\n")
-                return
-                
-            # If out_path doesn't exist but its parent does, we're copying to a new node with the name from out_path
-            # For this case, we'll use copy_path with the parent directory as the destination
-            # and then rename the copied node to match the last part of out_path
-            
-            # Get the name for the new node from the last part of out_path
-            new_name = out_path.path.split('/')[-1] if out_path.path != '/' else in_node.name
-            
-            # Copy to the parent directory
-            if not self.filesystem.copy_path(in_path.path, parent_path):
-                self.terminal.print(f"Error: could not copy '{in_path.path}' to '{parent_path}'.\n")
-                return
-                
-            # Get the newly created node (which has the same name as source)
-            copied_node = None
-            for child in parent_node.children:
-                if child.name == in_node.name:
-                    copied_node = child
-                    break
-                    
-            # Rename it to match the desired name
-            if copied_node:
-                copied_node.name = new_name
-                self.terminal.print(f"Copied '{in_path.path}' to '{out_path.path}'.\n")
-            
-        else:
-            # If out_node exists
-            if isinstance(out_node, Directory):
-                # Copy to inside the directory
-                if self.filesystem.copy_path(in_path.path, out_path.path):
-                    self.terminal.print(f"Copied '{in_path.path}' to '{out_path.path}/{in_node.name}'.\n")
-                else:
-                    self.terminal.print(f"Error: could not copy '{in_path.path}' to '{out_path.path}'.\n")
+            # Check if source exists
+            if not self.filesystem.exists(resolved_in_path):
+                self.terminal.print(f"cp: cannot stat '{in_path_str}': No such file or directory\n")
+            # Check if dest is a dir and src is a dir trying to overwrite it (not standard)
+            # The current copy does not overwrite. if resolved_out_path exists, it's an error from fs.copy
+            elif "already exists" in copy_result.error and self.filesystem.is_dir(resolved_in_path) and self.filesystem.is_file(resolved_out_path):
+                 self.terminal.print(f"cp: cannot overwrite non-directory '{out_path_str}' with directory '{in_path_str}'\n")
             else:
-                # Can't copy directory to file
-                if isinstance(in_node, Directory) and isinstance(out_node, File):
-                    self.terminal.print(f"Error: cannot overwrite file '{out_path.path}' with directory '{in_path.path}'.\n")
-                    return
-                
-                # Copy to parent directory and overwrite out_node
-                parent_path = out_path.up().path
-                if self.filesystem.copy_path(in_path.path, parent_path):
-                    # Get the parent node
-                    parent_node = self.filesystem.get_node(parent_path)
-                    
-                    # Find the copied node in parent's children
-                    for i, child in enumerate(parent_node.children):
-                        if child.name == in_node.name:
-                            # Rename to match destination file name
-                            child.name = out_path.path.split('/')[-1]
-                            self.terminal.print(f"Copied '{in_path.path}' to '{out_path.path}'.\n")
-                            return
-                    
-                    self.terminal.print(f"Error: copy operation succeeded but unable to find copied node.\n")
-                else:
-                    self.terminal.print(f"Error: could not copy '{in_path.path}' to '{out_path.path}'.\n")
-        
+                self.terminal.print(f"cp: error copying '{in_path_str}' to '{out_path_str}': {copy_result.error}\n")
+        # else: No output on success for cp
+
     def mv(self, in_path_str: str = "", out_path_str: str = "", *args, **kwargs):
         if not in_path_str or not out_path_str:
-            self.terminal.print("Error: both source and destination paths are required.\n")
+            self.terminal.print("mv: missing file operand\n")
             return
 
-        in_path = Path(in_path_str, self.shell.cwd)
-        out_path = Path(out_path_str, self.shell.cwd)
+        resolved_in_path = self._resolve_path(in_path_str)
+        resolved_out_path = self._resolve_path(out_path_str)
 
-        in_node = self.filesystem.get_node(in_path.path)
-        if in_node is None:
-            self.terminal.print(f"Error: source path '{in_path.path}' does not exist.\n")
+        if resolved_in_path == resolved_out_path:
+            self.terminal.print(f"mv: '{in_path_str}' and '{out_path_str}' are the same file\n")
+            return
+        
+        if resolved_in_path == "/":
+            self.terminal.print("mv: cannot move root directory '/'\n")
             return
 
-        # Cannot move the root directory
-        if in_path.path == "/":
-            self.terminal.print("Error: cannot move root directory.\n")
-            return
-        
-        out_node = self.filesystem.get_node(out_path.path)
-        
-        # Special case for rename in the same directory
-        if out_node is None and in_path.up().path == out_path.up().path:
-            # This is a rename operation in the same directory
-            parent_path = in_path.up().path
-            parent_node = self.filesystem.get_node(parent_path)
-            
-            if parent_node is None:
-                self.terminal.print(f"Error: parent directory '{parent_path}' does not exist.\n")
-                return
-                
-            # Simply rename the node
-            new_name = out_path.path.split('/')[-1]
-            for child in parent_node.children:
-                if child.name == in_node.name:
-                    child.name = new_name
-                    self.terminal.print(f"Moved '{in_path.path}' to '{out_path.path}'.\n")
-                    return
-                    
-            self.terminal.print(f"Error: failed to rename '{in_path.path}'.\n")
-            return
-        
-        # Special case for overwriting a file in the same directory
-        if out_node is not None and not isinstance(out_node, Directory) and in_path.up().path == out_path.up().path:
-            # This is an overwrite operation in the same directory
-            parent_path = in_path.up().path
-            parent_node = self.filesystem.get_node(parent_path)
-            
-            # Remove the destination node first
-            for i, child in enumerate(parent_node.children):
-                if child.name == out_node.name:
-                    # If source is a directory and destination is a file, error out
-                    if isinstance(in_node, Directory) and isinstance(child, File):
-                        self.terminal.print(f"Error: cannot overwrite file '{out_path.path}' with directory '{in_path.path}'.\n")
-                        return
-                    
-                    # Remove the destination node
-                    parent_node.children.pop(i)
-                    break
-            
-            # Now rename the source node to the destination name
-            for i, child in enumerate(parent_node.children):
-                if child.name == in_node.name:
-                    child.name = out_path.path.split('/')[-1]
-                    self.terminal.print(f"Moved '{in_path.path}' to '{out_path.path}'.\n")
-                    return
-                    
-            self.terminal.print(f"Error: failed to move '{in_path.path}'.\n")
-            return
-        
-        # Determine the target path for the move operation
-        if out_node is None:
-            # Check if the parent directory exists (for moving to a new path)
-            parent_path = out_path.up().path
-            parent_node = self.filesystem.get_node(parent_path)
-            
-            if parent_node is None:
-                self.terminal.print(f"Error: destination directory '{parent_path}' does not exist.\n")
-                return
-                
-            if not isinstance(parent_node, Directory):
-                self.terminal.print(f"Error: destination '{parent_path}' is not a directory.\n")
-                return
-                
-            # Get the name for the new node from the last part of out_path
-            new_name = out_path.path.split('/')[-1] if out_path.path != '/' else in_node.name
-            
-            # Copy to the parent directory
-            if not self.filesystem.copy_path(in_path.path, parent_path):
-                self.terminal.print(f"Error: could not move '{in_path.path}' to '{parent_path}'.\n")
-                return
-                
-            # Get the newly created node (which has the same name as source)
-            moved_node = None
-            for child in parent_node.children:
-                if child.name == in_node.name:
-                    moved_node = child
-                    break
-                    
-            # Rename it to match the desired name
-            if moved_node:
-                moved_node.name = new_name
-                
-                # Delete the original node
-                if self.filesystem.delete_node(in_path.path):
-                    self.terminal.print(f"Moved '{in_path.path}' to '{out_path.path}'.\n")
-                else:
-                    self.terminal.print(f"Warning: copied to '{out_path.path}' but failed to remove original '{in_path.path}'.\n")
-            
-        else:
-            # If out_node exists
-            if isinstance(out_node, Directory):
-                # Move to inside the directory
-                if self.filesystem.copy_path(in_path.path, out_path.path):
-                    # Delete the original node
-                    if self.filesystem.delete_node(in_path.path):
-                        self.terminal.print(f"Moved '{in_path.path}' to '{out_path.path}/{in_node.name}'.\n")
-                    else:
-                        self.terminal.print(f"Warning: copied to '{out_path.path}/{in_node.name}' but failed to remove original '{in_path.path}'.\n")
-                else:
-                    self.terminal.print(f"Error: could not move '{in_path.path}' to '{out_path.path}'.\n")
+        move_result = self.filesystem.move(resolved_in_path, resolved_out_path)
+
+        if not move_result.success:
+            if not self.filesystem.exists(resolved_in_path):
+                self.terminal.print(f"mv: cannot stat '{in_path_str}': No such file or directory\n")
+            # Add more specific mv errors if needed here, similar to cp
+            elif "already exists" in move_result.error and self.filesystem.is_dir(resolved_in_path) and self.filesystem.is_file(resolved_out_path):
+                 self.terminal.print(f"mv: cannot overwrite non-directory '{out_path_str}' with directory '{in_path_str}'\n")
+            elif "directory into itself" in move_result.error: # Error from filesystem.move
+                self.terminal.print(f"mv: cannot move '{in_path_str}' to a subdirectory of itself, '{out_path_str}'\n")
             else:
-                # Can't move directory to file
-                if isinstance(in_node, Directory) and isinstance(out_node, File):
-                    self.terminal.print(f"Error: cannot overwrite file '{out_path.path}' with directory '{in_path.path}'.\n")
-                    return
-                
-                # Move to parent directory and overwrite out_node
-                parent_path = out_path.up().path
-                if self.filesystem.copy_path(in_path.path, parent_path):
-                    # Get the parent node
-                    parent_node = self.filesystem.get_node(parent_path)
-                    
-                    # Find the copied node in parent's children
-                    for i, child in enumerate(parent_node.children):
-                        if child.name == in_node.name:
-                            # Rename to match destination file name
-                            child.name = out_path.path.split('/')[-1]
-                            
-                            # Delete the original node
-                            if self.filesystem.delete_node(in_path.path):
-                                self.terminal.print(f"Moved '{in_path.path}' to '{out_path.path}'.\n")
-                            else:
-                                self.terminal.print(f"Warning: copied to '{out_path.path}' but failed to remove original '{in_path.path}'.\n")
-                            return
-                    
-                    self.terminal.print(f"Error: move operation partially succeeded but unable to find moved node.\n")
-                else:
-                    self.terminal.print(f"Error: could not move '{in_path.path}' to '{out_path.path}'.\n")
-        
+                self.terminal.print(f"mv: error moving '{in_path_str}' to '{out_path_str}': {move_result.error}\n")
+        # else: No output on success for mv
+
         
         

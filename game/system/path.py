@@ -1,63 +1,60 @@
-class Path:
-    def __init__(self, path: str, cwd: str):
-        self.trailing_slash = path.endswith('/')
-        self.path = self._resolve_path(path, cwd)
+class FSPath:
+    def __init__(self, path_str: str):
+        if not isinstance(path_str, str):
+            raise TypeError("path_str must be a string")
+        self.raw_path = path_str
+        self.components = self._parse(path_str)
 
-    # Move up one directory
-    def up(self):
-        if self.path == "/":
-            return self  # Root directory has no parent
+    def _parse(self, path_str: str) -> list[str]:
+        # Normalize: remove trailing slashes unless it's the root "/"
+        normalized_path = path_str.rstrip('/')
+        if not normalized_path and path_str.startswith('/'): # Handles root "/"
+            return [] 
         
-        parent_path = self.path.rsplit('/', 1)[0]
-        if not parent_path:  # Handle case where we're one level below root
-            parent_path = "/"
-            
-        result = Path(parent_path, "/")  # Create a new Path with the parent path
-        return result
+        # Split and filter empty components that might arise from multiple slashes
+        return [p for p in normalized_path.lstrip('/').split('/') if p]
 
-    def _resolve_path(self, path_str: str, cwd: str) -> str:
-        """
-        Resolves a given path string to an absolute path, handling CWD
-        and cleaning up redundant slashes like '//' or trailing '/'.
-        This method resolves '.' and '..'.
+    def is_root(self) -> bool:
+        return not self.components
+
+    def parent(self) -> 'FSPath':
+        if self.is_root():
+            return self  # Parent of root is root
+        
+        parent_path_str = self.raw_path.rstrip('/')
+        if not self.components: # Should be caught by is_root, but defensive
+             return FSPath("/")
+
+        # Find the last slash before the last component
+        last_slash_idx = parent_path_str.rfind('/')
+        if last_slash_idx == -1: # No slashes, e.g. "file.txt"
+            if self.raw_path.startswith("/"): # e.g. "/file.txt"
+                 return FSPath("/")
+            else: # relative path, parent is effectively "." which we'll treat as root for simplicity here
+                 return FSPath("/") # Or handle relative paths differently if needed
+        elif last_slash_idx == 0: # e.g. "/foo" -> parent is "/"
+            return FSPath("/")
+        
+        return FSPath(parent_path_str[:last_slash_idx] or "/")
+
+
+    def name(self) -> str:
+        if self.is_root():
+            return ""  # Root has no name in this context or could be "/"
+        return self.components[-1]
+
+    def __str__(self) -> str:
+        return "/" + "/".join(self.components) if self.raw_path.startswith('/') or self.is_root() else "/".join(self.components)
     
-        Assumes path_str is not empty, as callers should check first.
-        """
-        
-        full_path: str
-        if path_str.startswith('/'):
-            full_path = path_str
-        else:
-            # Relative path
-            if cwd == '/':
-                full_path = '/' + path_str # Avoids '//file'
-            else:
-                full_path = cwd + '/' + path_str # e.g., "/home" + "/" + "file"
+    def __repr__(self) -> str:
+        return f"FSPath('{self.__str__()}')"
 
-        # Normalize the path:
-        # Split by '/', filter out empty components (this handles multiple slashes),
-        # then rejoin with single slashes, and ensure it starts with a single '/'.
-        components = [comp for comp in full_path.split('/') if comp]
+    def __eq__(self, other) -> bool:
+        if isinstance(other, FSPath):
+            return self.components == other.components and self.is_absolute() == other.is_absolute()
+        if isinstance(other, str):
+            return str(self) == other
+        return False
         
-        # Resolve '.' and '..'
-        resolved_components = []
-        for component in components:
-            if component == '.':
-                continue
-            elif component == '..':
-                if resolved_components: # Check if there's a component to pop
-                    resolved_components.pop()
-            else:
-                resolved_components.append(component)
-
-        if not resolved_components:
-            # This means the path was effectively root (e.g., input "/", "///", or resolved to it).
-            return "/" 
-        
-        # Reconstruct with a leading slash and single slashes between components.
-        normalized_path = "/" + "/".join(resolved_components)
-        
-        return normalized_path
-
-    def __str__(self):
-        return self.path
+    def is_absolute(self) -> bool:
+        return self.raw_path.startswith('/')
