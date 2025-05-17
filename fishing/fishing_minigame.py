@@ -20,9 +20,12 @@ class FishingMinigame:
         self.screen = screen
         self.width = screen.get_width()
         self.height = screen.get_height()
-        
+
+        self.tutorial_drawed = False
+
         # Load font
         self.font = pygame.font.Font(font_path, 32)
+        self.text_handler = self.font.render('', True, (255, 255, 255))
         self.small_font = pygame.font.Font(font_path, 24)
         
         # Text renderers - only for large/complex texts
@@ -82,6 +85,7 @@ class FishingMinigame:
         
         # Message display
         self.message = ""
+        self.old_message = self.message
         self.message_timer = 0
         
         # Tutorial state
@@ -97,6 +101,35 @@ class FishingMinigame:
         
         # Pre-rendered text surfaces (for performance)
         self.text_cache = {}
+
+        # Pre-populate text_cache with commonly used text
+        common_texts = [
+            "PRESS SPACE!", "HOLD SPACE TO RAISE BAR", "HOLD SPACE, RELEASE TO CAST",
+            "PERFECT CAST!", "GOOD CAST!", "WEAK CAST...",
+            "Fish on! Press SPACE when the marker is in the red zone!",
+            "Keep the bar in the yellow zone!",
+            "The fish got away!",
+            "Hold SPACE to charge, release to cast!",
+            "Waiting for a bite...",
+            "You caught some trash:",
+        ]
+
+        # Add time values for the timer
+        for i in range(16):  # 0-15 seconds
+            common_texts.append(f"Time: {i}s")
+
+        """
+        # Add common score values
+        for i in range(0, 101, 5):  # 0, 5, 10, ... 100
+            common_texts.append(f"{i}/")
+            for j in range(80, 151, 10):  # Common max scores: 80, 90, ... 150
+                common_texts.append(f"{i}/{j}")
+        """
+
+        for text in common_texts:
+            self.text_cache[(text, self.font, self.WHITE)] = self.font.render(text, True, self.WHITE)
+            self.text_cache[(text, self.font, self.YELLOW)] = self.font.render(text, True, self.YELLOW)
+            self.text_cache[(text, self.small_font, self.WHITE)] = self.small_font.render(text, True, self.WHITE)
         
         # Inventory
         self.inventory: List[FishableItem] = []
@@ -107,18 +140,6 @@ class FishingMinigame:
         if key not in self.text_cache:
             self.text_cache[key] = font.render(text, True, color)
         return self.text_cache[key]
-
-    def draw_rod(self):
-        # Draw fishing rod as a line
-        length = 100
-        end_x = self.rod_start_pos[0] + length * math.cos(math.radians(self.rod_angle))
-        end_y = self.rod_start_pos[1] - length * math.sin(math.radians(self.rod_angle))
-        rod_end = (end_x, end_y)
-        pygame.draw.line(self.screen, self.GREEN, self.rod_start_pos, rod_end, 5)
-        
-        # Draw fishing line if cast
-        if self.state in [FishingState.WAITING, FishingState.QTE, FishingState.BATTLE]:
-            pygame.draw.line(self.screen, self.WHITE, rod_end, self.line_end_pos, 1)
 
     def draw_casting_meter(self):
         if self.state == FishingState.CASTING:
@@ -244,16 +265,24 @@ class FishingMinigame:
             
             # Draw score text
             score_text = f"{int(self.battle_score)}/{int(self.max_battle_score)}"
-            text_surf = self.get_text_surface(score_text, self.font, self.WHITE)
-            text_rect = text_surf.get_rect(center=(score_x + score_width // 2, score_y + score_height // 2))
-            self.screen.blit(text_surf, text_rect)
+            """
+            # Use a cached value for rendering unchanging parts
+            if ("score_prefix", self.font, self.WHITE) not in self.text_cache:
+                self.text_cache[("score_prefix", self.font, self.WHITE)] = self.font.render(f"0/{int(self.max_battle_score)}", True, self.WHITE)
+            
+            # Only update score text when it changes
+            if (score_text, self.font, self.WHITE) not in self.text_cache:
+                self.text_cache[(score_text, self.font, self.WHITE)] = self.font.render(score_text, True, self.WHITE)
+            """
+            """
+            text_surf = self.text_cache[(score_text, self.font, self.WHITE)]
+            """
+            
+            text_rect = (score_x + score_width // 2, score_y + score_height // 2)
+            self.screen.blit(self.text_handler, text_rect)
             
             # Draw timeout timer
             remaining_time = (self.battle_timeout - self.battle_timer) // 60  # Convert to seconds
-            timer_text = f"Time: {remaining_time}s"
-            timer_surf = self.get_text_surface(timer_text, self.small_font, self.WHITE)
-            timer_rect = timer_surf.get_rect(topright=(self.width - 20, 20))
-            self.screen.blit(timer_surf, timer_rect)
             
             # Draw instruction - only for the first two battle tutorials
             if self.battle_tutorial_count < self.max_tutorial_count:
@@ -262,7 +291,8 @@ class FishingMinigame:
                 self.screen.blit(text_surf, text_rect)
 
     def draw_message(self):
-        if self.message and self.message_timer > 0:
+        if self.message != self.old_message and self.message_timer > 0:
+
             # Draw a background for the message
             self.message_text.clear()
             self.message_text.html(self.message)
@@ -284,8 +314,26 @@ class FishingMinigame:
             pygame.draw.rect(self.screen, self.BLACK, bg_rect, 0)
             pygame.draw.rect(self.screen, self.WHITE, bg_rect, 2)
             self.screen.blit(self.message_text.area, text_rect)
+        else:
+            self.message_text.clear()
+            self.message_text.html(self.old_message)
+            self.message_text.add_style(0, len(self.old_message), COLOR, self.WHITE)
+            self.message_text.update()
             
     def draw_tutorial(self):
+
+        # Draw text with background
+        text_rect = self.tutorial_text.area.get_rect(center=(self.width // 2, self.height // 2))
+
+        # Add padding
+        padding = 20
+        bg_rect = pygame.Rect(
+            text_rect.left - padding,
+            text_rect.top - padding,
+            text_rect.width + padding * 2,
+            text_rect.height + padding * 2
+        )
+
         if self.state == FishingState.TUTORIAL:
             # Create tutorial text based on current step
             tutorial_messages = [
@@ -294,25 +342,14 @@ class FishingMinigame:
             ]
             
             # Update tutorial text
-            self.tutorial_text.clear()
-            self.tutorial_text.html(tutorial_messages[self.tutorial_step])
-            self.tutorial_text.add_style(0, tutorial_messages[self.tutorial_step].find("\n"), COLOR, self.YELLOW)
-            self.tutorial_text.add_style(0, tutorial_messages[self.tutorial_step].find("\n"), BOLD)
-            self.tutorial_text.update()
+            if not self.tutorial_drawed:
+                self.tutorial_text.clear()
+                self.tutorial_text.html(tutorial_messages[self.tutorial_step])
+                self.tutorial_text.add_style(0, tutorial_messages[self.tutorial_step].find("\n"), COLOR, self.YELLOW)
+                self.tutorial_text.add_style(0, tutorial_messages[self.tutorial_step].find("\n"), BOLD)
+                self.tutorial_text.update()
+                self.tutorial_drawed = True
             
-            # Draw text with background
-            text_rect = self.tutorial_text.area.get_rect(center=(self.width // 2, self.height // 2))
-            
-            # Add padding
-            padding = 20
-            bg_rect = pygame.Rect(
-                text_rect.left - padding,
-                text_rect.top - padding,
-                text_rect.width + padding * 2,
-                text_rect.height + padding * 2
-            )
-            
-            # Draw background and text
             pygame.draw.rect(self.screen, self.BLACK, bg_rect, 0)
             pygame.draw.rect(self.screen, self.WHITE, bg_rect, 2)
             self.screen.blit(self.tutorial_text.area, text_rect)
@@ -497,7 +534,8 @@ class FishingMinigame:
         if self.battle_timer >= self.battle_timeout:
             self.complete_fishing(False)
             return
-        
+
+        """ 
         # Move the target zone occasionally
         if self.battle_timer % 90 == 0:  # Slowed down movement
             # Move target zone randomly, weighted toward the center more
@@ -509,6 +547,7 @@ class FishingMinigame:
                 self.battle_zone_pos = min(target, self.battle_zone_pos + zone_speed)
             else:
                 self.battle_zone_pos = max(target, self.battle_zone_pos - zone_speed)
+        """
         
         # Apply gravity to the bar
         self.battle_bar_velocity += 0.15 * self.battle_difficulty  # Reduced gravity
@@ -541,9 +580,12 @@ class FishingMinigame:
         # Calculate score based on position within zone
         if overlap > 0:
             # Max score when centered in zone
+            """
             center_distance = abs(self.battle_bar_pos - self.battle_zone_pos)
             center_factor = 1.0 - (center_distance / (self.battle_zone_size / 2))
             center_factor = max(0, center_factor)
+            """
+            center_factor = 0.8
             
             # Add score - increased rate
             score_rate = 0.6 * (1 + center_factor)
@@ -580,13 +622,11 @@ class FishingMinigame:
         # Update timers
         if self.message_timer > 0:
             self.message_timer -= 1
-            
+        
         if self.cast_quality_timer > 0:
             self.cast_quality_timer -= 1
 
     def draw(self):
-        # Draw rod and line
-        self.draw_rod()
         
         # Draw state-specific elements
         if self.state == FishingState.TUTORIAL:
@@ -621,3 +661,13 @@ class FishingMinigame:
         if self.state == FishingState.BATTLE and keys[pygame.K_SPACE]:
             # Apply upward force when space is held - increased significantly
             self.battle_bar_velocity -= 1.5 * self.battle_difficulty 
+
+    def cleanup_state_resources(self, old_state, new_state):
+        # Clear unused surfaces when transitioning states
+        if old_state == FishingState.TUTORIAL and new_state != FishingState.TUTORIAL:
+            # Clear tutorial surfaces
+            self.tutorial_text = None
+            # Clean relevant entries from text_cache
+            keys_to_remove = [k for k in self.text_cache if "TUTORIAL" in str(k[0])]
+            for key in keys_to_remove:
+                del self.text_cache[key] 

@@ -9,6 +9,7 @@ class FishingScene:
         self.height = screen.get_height()
         
         # Create fishing minigame instance
+        print("Creating fishing minigame instance")
         self.fishing_minigame = FishingMinigame(screen, font_path)
         
         # Create text renderer
@@ -19,21 +20,12 @@ class FishingScene:
         self.BACKGROUND = (20, 20, 40)
         self.GRID_COLOR = (40, 40, 60)
         self.TEXT_COLOR = (180, 180, 220)
+
+        self.background = pygame.Surface((self.width, self.height))
         
     def draw_background(self):
         # Fill with dark background color
         self.screen.fill(self.BACKGROUND)
-        
-        # Draw terminal-style grid lines
-        grid_spacing = 20
-        
-        # Draw horizontal grid lines
-        for y in range(0, self.height, grid_spacing):
-            pygame.draw.line(self.screen, self.GRID_COLOR, (0, y), (self.width, y), 1)
-        
-        # Draw vertical grid lines
-        for x in range(0, self.width, grid_spacing):
-            pygame.draw.line(self.screen, self.GRID_COLOR, (x, 0), (x, self.height), 1)
             
         # Draw info text at the bottom
         self.info_text.clear()
@@ -78,8 +70,8 @@ def run_fishing_scene(screen: pygame.Surface, font_path: str):
                     running = False
             scene.handle_event(event)
         
-        scene.update()
         scene.draw()
+        scene.update()
         pygame.display.flip()
         clock.tick(60)
     
