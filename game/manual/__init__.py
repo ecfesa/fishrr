@@ -1,0 +1,1 @@
+from game.manual.manual import create_command_list_instance, handle_manual_events, draw_manual_view

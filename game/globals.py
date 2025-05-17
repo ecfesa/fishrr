@@ -14,3 +14,14 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
 GREEN = (0, 255, 0)
+
+# Game States
+GAME_STATE_TERMINAL = "terminal"
+GAME_STATE_MANUAL = "manual"
+GAME_STATE = GAME_STATE_TERMINAL # Initial game state
+
+# Manual View Instance
+MANUAL_VIEW_INSTANCE = None
+
+# Discovered Commands (placeholder - this should ideally be loaded/saved or part of game progression)
+DISCOVERED_COMMANDS = {"ls", "pwd", "cd", "exit", "cat", "help", "clear", "man"} # Added "man" to discovered

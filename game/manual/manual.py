@@ -3,9 +3,9 @@ import pygame.gfxdraw
 from typing import Dict, Set, Tuple, List
 import math
 import os
-
-# Initialize pygame
-pygame.init()
+from game.manual.commands_data import load_commands
+from game.assets import TITLE_FONT, BODY_FONT, EXAMPLE_FONT, HINT_FONT
+import game.globals as g
 
 # Colors - Update to fishing theme
 BACKGROUND_COLOR = (0, 0, 0)         # Black
@@ -17,98 +17,11 @@ HIGHLIGHT_COLOR = (0, 100, 0)    # Darker Green for highlight
 EXAMPLE_COLOR = (0, 180, 0)      # Lighter Green for examples
 
 # Window dimensions
-WIDTH, HEIGHT = 480, 640
+# WIDTH, HEIGHT = 480, 640 # These will now be passed to CommandList
 BORDER_RADIUS = 8
 BORDER_WIDTH = 2
 PADDING = 20
 
-# Font setup
-try:
-    font_path = "font/JetBrainsMono-Regular.ttf"
-    if os.path.exists(font_path):
-        TITLE_FONT = pygame.font.Font(font_path, 30) # Increased title font size
-        BODY_FONT = pygame.font.Font(font_path, 14)
-        EXAMPLE_FONT = pygame.font.Font(font_path, 13)
-    else:
-        # Final fallback to system fonts if custom font not available
-        TITLE_FONT = pygame.font.SysFont("consolas", 30) # Increased title font size
-        BODY_FONT = pygame.font.SysFont("consolas", 14)
-        EXAMPLE_FONT = pygame.font.SysFont("consolas", 13)
-except:
-    # Final fallback to system fonts if custom font not available
-    TITLE_FONT = pygame.font.SysFont("consolas", 30) # Increased title font size
-    BODY_FONT = pygame.font.SysFont("consolas", 18)
-    EXAMPLE_FONT = pygame.font.SysFont("consolas", 16)
-
-def load_commands() -> Dict[str, Dict[str, str]]:
-    """Load all commands, their descriptions, and examples."""
-    commands = {
-        "ls": {
-            "desc": "list files/directories in cwd. Shows disk usage for each file",
-            "example": "ls\nls -la\nls /home/user"
-        },
-        "pwd": {
-            "desc": "prints current directory",
-            "example": "pwd"
-        },
-        "tree": {
-            "desc": "shows file tree. Supposed to show everything available",
-            "example": "tree\ntree -L 2"
-        },
-        "cd": {
-            "desc": "changes the current directory, supports passworded folders",
-            "example": "cd /path/to/dir\ncd ..\ncd ~"
-        },
-        "cp": {
-            "desc": "copies a file/directory. Has restrictions on what can be copied",
-            "example": "cp file.txt destination/\ncp -r folder/ destination/"
-        },
-        "exit": {
-            "desc": "closes the game",
-            "example": "exit"
-        },
-        "cat": {
-            "desc": "prints out a file. Shows the contents of things in the game",
-            "example": "cat file.txt\ncat -n file.txt"
-        },
-        "help": {
-            "desc": "displays a help prompt with simple useful commands",
-            "example": "help\nhelp command"
-        },
-        "rm": {
-            "desc": "deletes a file/directory ('drops' the file into the water)",
-            "example": "rm file.txt\nrm -rf directory/"
-        },
-        "reboot": {
-            "desc": "resets the game",
-            "example": "reboot"
-        },
-        "clear": {
-            "desc": "wipes the CLI text",
-            "example": "clear"
-        },
-        "egg": {
-            "desc": "...",
-            "example": "???"
-        },
-        "ps": {
-            "desc": "lists running processes",
-            "example": "ps\nps aux"
-        },
-        "kill": {
-            "desc": "kills a process",
-            "example": "kill 1234\nkill -9 5678"
-        },
-        "df": {
-            "desc": "shows current disk usage",
-            "example": "df\ndf -h"
-        },
-        "fish lore": {
-            "desc": "fish lore...",
-            "example": "fish lore"
-        }
-    }
-    return commands
 
 def get_hidden_commands() -> Set[str]:
     """Return the set of hidden commands."""
@@ -150,13 +63,17 @@ def blur_text(surface: pygame.Surface, text: str, pos: Tuple[int, int], font: py
     surface.blit(blur_surface, pos)
 
 class CommandList:
-    def __init__(self, discovered: Set[str]):
+    def __init__(self, discovered: Set[str], surface_width: int, surface_height: int): # Added surface dimensions
         self.commands = load_commands()
         self.hidden = get_hidden_commands()
         self.discovered = discovered
         self.expanded_command = None
         self.scroll_offset = 0
         self.active_buttons_feedback = {} # For visual feedback on key press
+
+        # Use passed dimensions
+        self.surface_width = surface_width
+        self.surface_height = surface_height
 
         # Layout constants
         self.screen_margin = 20  # Increased outer margin
@@ -178,7 +95,7 @@ class CommandList:
         # UP scroll button positioning
         up_button_top_y = self.title_line_y + self.content_padding
         self.up_button_rect = pygame.Rect(0, 0, self.scroll_button_width, self.scroll_button_height)
-        self.up_button_rect.centerx = WIDTH // 2
+        self.up_button_rect.centerx = self.surface_width // 2 # Use surface_width
         self.up_button_rect.top = up_button_top_y
         
         # Start Y for command list (top of command drawing area)
@@ -186,8 +103,8 @@ class CommandList:
 
         # DOWN scroll button positioning
         self.down_button_rect = pygame.Rect(0, 0, self.scroll_button_width, self.scroll_button_height)
-        self.down_button_rect.centerx = WIDTH // 2
-        self.down_button_rect.bottom = HEIGHT - self.screen_margin - 10 # Added 10px bottom padding for the list area
+        self.down_button_rect.centerx = self.surface_width // 2 # Use surface_width
+        self.down_button_rect.bottom = self.surface_height - self.screen_margin - 10 # Use surface_height
         
         # Calculate command area height (space available for command entries)
         # This is the bottom limit for where command content can be drawn.
@@ -227,7 +144,7 @@ class CommandList:
     
     def get_command_rect(self, index: int, y_pos: int) -> pygame.Rect:
         """Get the rectangle for a command at the specified index and y position."""
-        return pygame.Rect(self.screen_margin, y_pos, WIDTH - 2 * self.screen_margin, BODY_FONT.get_height())
+        return pygame.Rect(self.screen_margin, y_pos, self.surface_width - 2 * self.screen_margin, BODY_FONT.get_height()) # Use surface_width
     
     def draw(self, surface: pygame.Surface, mouse_pos: Tuple[int, int] | None) -> List[Tuple[pygame.Rect, str]]:
         """Draw the command list and return a list of (rect, command) pairs for clickable areas."""
@@ -235,14 +152,14 @@ class CommandList:
         
         # Draw title
         title_text = TITLE_FONT.render("COMMAND LIST", True, TITLE_COLOR)
-        title_rect = title_text.get_rect(center=(WIDTH // 2, self.title_rect_center_y))
+        title_rect = title_text.get_rect(center=(self.surface_width // 2, self.title_rect_center_y)) # Use surface_width
         surface.blit(title_text, title_rect)
         
         # Draw horizontal line below title
         pygame.draw.line(
             surface, BORDER_COLOR, 
             (self.screen_margin, self.title_line_y),
-            (WIDTH - self.screen_margin, self.title_line_y), 1
+            (self.surface_width - self.screen_margin, self.title_line_y), 1 # Use surface_width
         )
         
         # Draw Scroll Buttons
@@ -269,9 +186,8 @@ class CommandList:
         surface.blit(down_text_render, down_text_rect)
 
         # Add navigation hint text
-        hint_font = pygame.font.Font(font_path, 14) if os.path.exists(font_path) else pygame.font.SysFont("consolas", 14)
-        hint_text_surface = hint_font.render("Use UP/DOWN arrow keys to scroll", True, TEXT_COLOR)
-        hint_text_rect = hint_text_surface.get_rect(centerx=WIDTH // 2, top=self.down_button_rect.bottom + 5)
+        hint_text_surface = HINT_FONT.render("Use UP/DOWN arrow keys to scroll", True, TEXT_COLOR)
+        hint_text_rect = hint_text_surface.get_rect(centerx=self.surface_width // 2, top=self.down_button_rect.bottom + 5) # Use surface_width
         surface.blit(hint_text_surface, hint_text_rect)
         
         clickable_areas = [(self.up_button_rect, "scroll_up"), (self.down_button_rect, "scroll_down")]
@@ -296,7 +212,7 @@ class CommandList:
             desc_render_details = {"is_present": False, "height": 0, "surfaces": []}
             if is_expanded_flag:
                 desc_str = cmd_info_dict["desc"]
-                max_desc_width_pixels = WIDTH - 2 * self.screen_margin - 20 - 25 # available width for desc, -20 for left padding
+                max_desc_width_pixels = self.surface_width - 2 * self.screen_margin - 20 - 25 # available width for desc, -20 for left padding # Use surface_width
                 
                 words = desc_str.split(' ')
                 lines = []
@@ -400,7 +316,7 @@ class CommandList:
                     pygame.draw.line(
                         surface, (BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2], 100),
                         (self.screen_margin, line_y),
-                        (WIDTH - self.screen_margin, line_y), 1
+                        (self.surface_width - self.screen_margin, line_y), 1 # Use surface_width
                     )
 
             # --- Draw Command Main Line ---
@@ -419,7 +335,7 @@ class CommandList:
             
             cmd_click_rect = pygame.Rect(
                 self.screen_margin, y_pos_item_start, 
-                WIDTH - 2 * self.screen_margin, cmd_click_rect_height
+                self.surface_width - 2 * self.screen_margin, cmd_click_rect_height # Use surface_width
             )
 
             if is_discovered or not is_hidden:
@@ -429,7 +345,7 @@ class CommandList:
                 if is_expanded: # Highlight the main line of the expanded command
                     highlight_rect = pygame.Rect(
                         self.screen_margin + 5, y_pos_item_start - 2, # Small offset for visual
-                        WIDTH - 2 * self.screen_margin - 10, cmd_click_rect_height + 4
+                        self.surface_width - 2 * self.screen_margin - 10, cmd_click_rect_height + 4 # Use surface_width
                     )
                     if highlight_rect.bottom < self.command_area_bottom_limit + cmd_click_rect_height:
                          pygame.draw.rect(surface, HIGHLIGHT_COLOR, highlight_rect, border_radius=4)
@@ -450,7 +366,7 @@ class CommandList:
                              surface.blit(line_surface, (self.screen_margin + 10 + desc_left_padding, current_desc_y)) # Indent expanded desc
                         current_desc_y += line_surface.get_height()
                 elif not is_expanded:
-                    max_desc_width_pixels = (WIDTH - self.screen_margin - 20 - desc_x_start)
+                    max_desc_width_pixels = (self.surface_width - self.screen_margin - 20 - desc_x_start) # Use surface_width
                     desc_str = cmd_info["desc"]
                     avg_char_width = BODY_FONT.size("A")[0]
                     if avg_char_width > 0:
@@ -465,7 +381,7 @@ class CommandList:
                 # Expansion Indicator
                 expand_indicator_char = "▼" if is_expanded else "▶"
                 exp_ind_surface = BODY_FONT.render(expand_indicator_char, True, TEXT_COLOR)
-                surface.blit(exp_ind_surface, (WIDTH - self.screen_margin - 25, y_pos_item_start)) # Adjusted for slightly more padding
+                surface.blit(exp_ind_surface, (self.surface_width - self.screen_margin - 25, y_pos_item_start)) # Adjusted for slightly more padding # Use surface_width
 
                 # --- Draw Expanded Example Section (if applicable) ---
                 if is_expanded:
@@ -480,7 +396,7 @@ class CommandList:
                         example_rect_visual = pygame.Rect(
                             self.screen_margin + 20, 
                             example_box_start_y,
-                            WIDTH - 2 * self.screen_margin - 40, 
+                            self.surface_width - 2 * self.screen_margin - 40, # Use surface_width
                             ex_details["height"] # This is the height of the content *inside* the box + its internal padding
                         )
                         
@@ -516,71 +432,153 @@ class CommandList:
         
         return clickable_areas
 
-def draw_manual(surface: pygame.Surface, discovered: Set[str], mouse_pos: Tuple[int, int] | None, command_list_ref: CommandList) -> List[Tuple[pygame.Rect, str]]:
+def draw_manual_view(surface: pygame.Surface, command_list_ref: CommandList, mouse_pos: Tuple[int, int] | None) -> List[Tuple[pygame.Rect, str]]: # Renamed and removed discovered
     """Draw the manual with the expandable command list."""
-    # command_list = CommandList(discovered) # Instance is now managed in main loop
     return command_list_ref.draw(surface, mouse_pos)
 
-def main():
-    """Test function to display the manual."""
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Command Manual")
-    clock = pygame.time.Clock()
+def create_command_list_instance(discovered_commands: Set[str], surface_width: int, surface_height: int) -> CommandList:
+    """Creates and returns an instance of CommandList."""
+    return CommandList(discovered_commands, surface_width, surface_height)
 
-    # Example: Discovered commands (replace with actual game logic)
-    discovered_commands = {"ls", "pwd", "cd", "exit", "cat", "help", "clear", "ps"} 
+def handle_manual_events(event: pygame.event.Event, command_list_instance: CommandList, current_mouse_pos: Tuple[int, int]) -> bool:
+    """
+    Handles events for the manual view.
+    Modifies command_list_instance state based on input.
+    Returns True if the manual should remain open, False to close (e.g., on ESC).
+    """
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        # Need to get clickable areas based on the current state *before* processing the click
+        # This is tricky because draw() both draws and returns clickable areas.
+        # For now, we'll assume that the main loop calls draw separately and we use current_mouse_pos
+        # A better way would be for draw() not to return clickable areas but for them to be properties
+        # of CommandList, or recalculated here.
+        # However, the current CommandList.draw() needs mouse_pos to highlight buttons.
+
+        # Simplified: for click handling, we need to know where the user clicked.
+        # The clickable areas are dynamic. We need to call draw (or a part of it)
+        # to determine what was clicked.
+        # Let's simulate getting clickable areas without drawing, if possible, or accept a slight inefficiency.
+        # For now, we'll pass mouse_pos and the event to CommandList methods if they exist,
+        # or replicate logic here.
+
+        # The original run() loop calls draw to get clickable_areas then processes.
+        # We'll replicate that logic pattern here.
+        # This means `handle_manual_events` might need the screen surface if it were to call draw directly.
+        # To avoid that, we'll rely on the main loop to call draw, and this function handles logic.
+
+        # The `clickable_areas` are determined by the `draw` method.
+        # This function is called within the event loop, which also calls `draw`.
+        # We need a way for this function to know what areas are clickable *at the moment of the event*.
+        # The main loop will call `draw_manual_view` which returns `clickable_areas`.
+        # The main loop should then pass these `clickable_areas` to this handler if it's a MOUSEBUTTONDOWN event.
+        # This is getting a bit convoluted.
+
+        # Let's simplify: `CommandList` itself should have methods to handle clicks on its components.
+
+        if event.button == 1: # Left click
+            # Check scroll buttons first
+            if command_list_instance.up_button_rect.collidepoint(event.pos):
+                command_list_instance.scroll(-1)
+                command_list_instance.set_button_feedback("scroll_up", True)
+                return True
+            elif command_list_instance.down_button_rect.collidepoint(event.pos):
+                command_list_instance.scroll(1)
+                command_list_instance.set_button_feedback("scroll_down", True)
+                return True
+            else:
+                # Check command toggles. This requires knowing the rects of commands.
+                # This logic was previously coupled with draw(). We need to decouple or pass more info.
+                # For now, let's assume the main loop passes the specific action if a command area was clicked.
+                # This function will be simplified: it handles generic manual inputs like scrolling via keys/wheel and ESC.
+                # Specific command toggling will be initiated by the main loop after checking `clickable_areas`.
+                pass # Command toggling will be handled by main loop based on draw_manual_view output
+
+        elif event.button == 4:  # Scroll wheel up
+            command_list_instance.scroll(-1)
+            command_list_instance.set_button_feedback("scroll_up", True)
+        elif event.button == 5:  # Scroll wheel down
+            command_list_instance.scroll(1)
+            command_list_instance.set_button_feedback("scroll_down", True)
     
-    command_list = CommandList(discovered_commands) # Create instance here
+    if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_UP:
+            command_list_instance.scroll(-1)
+            command_list_instance.set_button_feedback("scroll_up", True)
+        elif event.key == pygame.K_DOWN:
+            command_list_instance.scroll(1)
+            command_list_instance.set_button_feedback("scroll_down", True)
+        elif event.key == pygame.K_ESCAPE:
+            return False # Signal to close the manual
+            
+    if event.type == pygame.KEYUP:
+        if event.key == pygame.K_UP:
+            command_list_instance.set_button_feedback("scroll_up", False)
+        elif event.key == pygame.K_DOWN:
+            command_list_instance.set_button_feedback("scroll_down", False)
+            
+    return True # Keep manual open by default
 
-    running = True
-    while running:
-        mouse_pos = pygame.mouse.get_pos()
+# Remove the old run function and if __name__ == "__main__": block
+# def run():
+#     """Test function to display the manual."""
+#     screen = pygame.display.set_mode((WIDTH, HEIGHT))
+#     pygame.display.set_caption("Command Manual")
+#     clock = pygame.time.Clock()
+
+#     # Example: Discovered commands (replace with actual game logic)
+#     discovered_commands = {"ls", "pwd", "cd", "exit", "cat", "help", "clear", "ps"} 
+    
+#     command_list = CommandList(discovered_commands, WIDTH, HEIGHT) # Create instance here
+
+#     running = True
+#     while running:
+#         mouse_pos = pygame.mouse.get_pos()
         
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: # Left click
-                    clickable_areas_drawn = command_list.draw(screen, mouse_pos) # Get current clickable areas
-                    for rect, action in clickable_areas_drawn:
-                        if rect.collidepoint(event.pos):
-                            if action == "scroll_up":
-                                command_list.scroll(-1)
-                                command_list.set_button_feedback("scroll_up", True)
-                            elif action == "scroll_down":
-                                command_list.scroll(1)
-                                command_list.set_button_feedback("scroll_down", True)
-                            else: # It's a command
-                                command_list.toggle_command(action)
-                            break 
-                elif event.button == 4:  # Scroll wheel up
-                    command_list.scroll(-1)
-                    command_list.set_button_feedback("scroll_up", True)
-                elif event.button == 5:  # Scroll wheel down
-                    command_list.scroll(1)
-                    command_list.set_button_feedback("scroll_down", True)
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    command_list.scroll(-1)
-                    command_list.set_button_feedback("scroll_up", True)
-                elif event.key == pygame.K_DOWN:
-                    command_list.scroll(1)
-                    command_list.set_button_feedback("scroll_down", True)
-                elif event.key == pygame.K_ESCAPE:
-                    running = False # Allow exiting with ESC
-            if event.type == pygame.KEYUP:
-                if event.key == pygame.K_UP:
-                    command_list.set_button_feedback("scroll_up", False)
-                elif event.key == pygame.K_DOWN:
-                    command_list.set_button_feedback("scroll_down", False)
+#         for event in pygame.event.get():
+#             if event.type == pygame.QUIT:
+#                 running = False
+#             if event.type == pygame.MOUSEBUTTONDOWN:
+#                 if event.button == 1: # Left click
+#                     clickable_areas_drawn = command_list.draw(screen, mouse_pos) # Get current clickable areas
+#                     for rect, action in clickable_areas_drawn:
+#                         if rect.collidepoint(event.pos):
+#                             if action == "scroll_up":
+#                                 command_list.scroll(-1)
+#                                 command_list.set_button_feedback("scroll_up", True)
+#                             elif action == "scroll_down":
+#                                 command_list.scroll(1)
+#                                 command_list.set_button_feedback("scroll_down", True)
+#                             else: # It's a command
+#                                 command_list.toggle_command(action)
+#                             break 
+#                 elif event.button == 4:  # Scroll wheel up
+#                     command_list.scroll(-1)
+#                     command_list.set_button_feedback("scroll_up", True)
+#                 elif event.button == 5:  # Scroll wheel down
+#                     command_list.scroll(1)
+#                     command_list.set_button_feedback("scroll_down", True)
+#             if event.type == pygame.KEYDOWN:
+#                 if event.key == pygame.K_UP:
+#                     command_list.scroll(-1)
+#                     command_list.set_button_feedback("scroll_up", True)
+#                 elif event.key == pygame.K_DOWN:
+#                     command_list.scroll(1)
+#                     command_list.set_button_feedback("scroll_down", True)
+#                 elif event.key == pygame.K_ESCAPE:
+#                     running = False # Allow exiting with ESC
+#             if event.type == pygame.KEYUP:
+#                 if event.key == pygame.K_UP:
+#                     command_list.set_button_feedback("scroll_up", False)
+#                 elif event.key == pygame.K_DOWN:
+#                     command_list.set_button_feedback("scroll_down", False)
 
 
-        screen.fill(BACKGROUND_COLOR)
-        clickable_areas = draw_manual(screen, discovered_commands, mouse_pos, command_list)
-        pygame.display.flip()
-        clock.tick(30)
+#         screen.fill(BACKGROUND_COLOR)
+#         clickable_areas = draw_manual(screen, discovered_commands, mouse_pos, command_list)
+#         pygame.display.flip()
+#         clock.tick(g.FPS)
 
-    pygame.quit()
+#     pygame.quit()
 
-if __name__ == "__main__":
-    main() 
+# if __name__ == "__main__":
+# run() 

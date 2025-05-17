@@ -2,6 +2,8 @@ from game.system.filesystem import FileSystem, Directory, File
 from game.system.shell import Shell
 from game.system.terminal import Terminal
 from game.system.game_files import fs as game_fs_instance
+import game.manual as manual
+import game.globals as g # Import globals
 
 class System:
     def __init__(self, size_x: int, size_y: int):
@@ -18,6 +20,7 @@ class System:
         self.shell.register_cmd("mv", self.mv)
         self.shell.register_cmd("cat", self.cat)
         self.shell.register_cmd("tree", self.tree)
+        self.shell.register_cmd("man", self.man)
 
     def get_buffer(self):
         return self.terminal.buffer
@@ -296,5 +299,19 @@ class System:
                 self.terminal.print(f"mv: error moving '{in_path_str}' to '{out_path_str}': {move_result.error}\n")
         # else: No output on success for mv
 
-        
+    def man(self, *args, **kwargs):
+        self.terminal.print("Launching manual...\n")
+        # manual.run() # Old way
+
+        g.GAME_STATE = g.GAME_STATE_MANUAL
+        if g.MANUAL_VIEW_INSTANCE is None:
+            # We need the dimensions of the main display surface (g.WIN)
+            # These are g.WIDTH and g.HEIGHT from globals.py
+            g.MANUAL_VIEW_INSTANCE = manual.create_command_list_instance(
+                g.DISCOVERED_COMMANDS, 
+                g.WIDTH, 
+                g.HEIGHT
+            )
+        # Potentially, we might want to re-initialize if discovered commands change
+        # or pass the surface dimensions if they can change dynamically (not the case here).
         
