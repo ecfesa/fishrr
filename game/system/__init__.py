@@ -1,3 +1,3 @@
-from game.system.fish_os import System
+from game.system.system import System
 
 __all__ = ["System"]

@@ -1,5 +1,6 @@
 from game.system.terminal import Terminal
 from enum import Enum
+import random
 
 class ShellMode(Enum):
     DIRECT = 1
@@ -29,9 +30,12 @@ class Shell:
 
     def _process_input_auto(self, char: str):
         if len(self.auto_text) > 0:
-            self.terminal.print(self.auto_text[0])
-            self.cmd += self.auto_text[0]
-            self.auto_text = self.auto_text[1:]
+            num_chars = random.randint(1, 4)
+            if num_chars > len(self.auto_text):
+                num_chars = len(self.auto_text)
+            self.terminal.print(self.auto_text[:num_chars])
+            self.cmd += self.auto_text[:num_chars]
+            self.auto_text = self.auto_text[num_chars:]
         else:
             self.mode = ShellMode.DIRECT
             self._process_input_direct(char)
@@ -65,6 +69,7 @@ class Shell:
         if self.cmd == "" or self.cmd[0] == "#":
             self.terminal.print("\n")
             self.print_shell_prompt()
+            self.cmd = ""
             return
 
         bin = self.cmd.split(" ")[0]
@@ -75,7 +80,7 @@ class Shell:
         elif bin in self.cmds.keys():
             self.cmds[bin](*args)
         else:
-            self.terminal.print(f"Unknown command: {self.cmd}\n")
+            self.terminal.print(f"Unknown command: {bin}\n")
 
         self.cmd = ""
         self.print_shell_prompt()

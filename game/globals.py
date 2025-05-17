@@ -2,6 +2,7 @@ import game.system as system
 import pygame
 
 SYSTEM = system.System(65, 25)
+SYSTEM.shell.add_auto_text("# You can copy files from the root directory to the backpack.")
 
 PADDING = 20
 

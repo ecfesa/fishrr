@@ -1,38 +1,130 @@
 from enum import Enum
+from game.system.path import Path
 
 class Node:
-    def __init__(self, name: str, parent):
+    def __init__(self, name: str, parent = None, password: str | None = None):
         self.name: str = name
         self.parent: Node | None = parent
+        self.password: str | None = password
+    
+    def add_child(self, child):
+        child.parent = self
+        self.children.append(child)
 
 class Directory(Node):
-    def __init__(self, name: str, parent: Node | None, children: list[Node] | None = None):
-        super().__init__(name, parent)
-        self.children: list[Node] = children if children is not None else []
+    def __init__(self, name: str, parent = None, children: list[Node] = [], password: str | None = None):
+        super().__init__(name, parent, password)
+        self.children: list[Node] = children
 
 class File(Node):
-    def __init__(self, name: str, parent: Node | None, contents: str):
-        super().__init__(name, parent)
+    def __init__(self, name: str, parent = None, contents: str = "", password: str | None = None):
+        super().__init__(name, parent, password)
         self.contents = contents
 
 class FileSystem:
-    def __init__(self):
-        self.root = Directory("/", None, [])
+    def __init__(self, root: Directory):
+        self.root = root
+    
+    def copy_path(self, in_path, out_path):
+        """
+        Copy a node from in_path to out_path.
+        
+        Parameters:
+        - in_path: Path or str - Path to the source node
+        - out_path: Path or str - Path to the destination directory
+        
+        Returns:
+        - bool: True if successful, False otherwise
+        """
+        # Convert path strings to strings if they're Path objects
+        in_path_str = in_path.path if hasattr(in_path, 'path') else in_path
+        out_path_str = out_path.path if hasattr(out_path, 'path') else out_path
+        
+        in_node = self.get_node(in_path_str)
+        if in_node is None:
+            return False
+        
+        out_node = self.get_node(out_path_str)
+        if out_node is None:
+            return False
+        
+        if not isinstance(out_node, Directory):
+            return False
+        
+        # Create a copy of the node instead of reusing the same reference
+        if isinstance(in_node, File):
+            # Always create a new node with the original name (not replacing)
+            new_node = File(in_node.name, out_node, in_node.contents, in_node.password)
+            out_node.children.append(new_node)
+        elif isinstance(in_node, Directory):
+            # Create a new directory with same properties
+            new_node = Directory(in_node.name, out_node, [], in_node.password)
+            out_node.children.append(new_node)
+            
+            # Recursively copy all children
+            for child in in_node.children:
+                if isinstance(child, File):
+                    child_copy = File(child.name, new_node, child.contents, child.password)
+                    new_node.children.append(child_copy)
+                elif isinstance(child, Directory):
+                    # For directories, we need to handle them recursively
+                    self._copy_directory(child, new_node)
+        
+        return True
+        
+    def _copy_directory(self, src_dir: Directory, dst_parent: Directory):
+        """Helper method to recursively copy directory contents"""
+        # Create new directory node
+        new_dir = Directory(src_dir.name, dst_parent, [], src_dir.password)
+        
+        # Check if a directory with the same name already exists
+        existing_dir_index = None
+        for i, child in enumerate(dst_parent.children):
+            if child.name == new_dir.name:
+                existing_dir_index = i
+                break
+        
+        if existing_dir_index is not None:
+            # Replace existing directory
+            dst_parent.children[existing_dir_index] = new_dir
+        else:
+            # Add as new directory
+            dst_parent.children.append(new_dir)
+        
+        # Copy all children
+        for child in src_dir.children:
+            if isinstance(child, File):
+                file_copy = File(child.name, new_dir, child.contents, child.password)
+                
+                # Check if a file with the same name already exists
+                existing_file_index = None
+                for i, existing_child in enumerate(new_dir.children):
+                    if existing_child.name == file_copy.name:
+                        existing_file_index = i
+                        break
+                
+                if existing_file_index is not None:
+                    # Replace existing file
+                    new_dir.children[existing_file_index] = file_copy
+                else:
+                    # Add as new file
+                    new_dir.children.append(file_copy)
+            elif isinstance(child, Directory):
+                self._copy_directory(child, new_dir)
 
-    def get_node(self, path: str) -> Node | None:
-        normalized_path = path.strip()
-        if not normalized_path: # Handles empty string path
+    def get_node(self, path: Path) -> Node | None:
+        if not path: # Handles empty string path
             return None
 
-        if normalized_path == "/":
+        if path == "/":
             return self.root
         
         # Filters out empty strings from multiple slashes e.g. "/foo//bar" -> ["foo", "bar"]
         # or leading/trailing slashes for non-root paths e.g. "/foo/" -> ["foo"]
-        parts = [part for part in normalized_path.split('/') if part]
-        
+        parts = [part for part in path.split('/') if part]
+
         # If after stripping and splitting, parts is empty, but path wasn't just "/", it's invalid (e.g. "///")
-        if not parts and normalized_path != "/":
+        if not parts and path != "/":
              return None
 
         current_node = self.root
